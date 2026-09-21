@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      A Material 3 theme derived from a single seed colour. Compose does the
+      rest at runtime; this exists so the manifest has something to point at
+      and so the window background is right before Compose draws.
+    -->
+    <style name="Theme.HyalosPlayer" parent="android:Theme.Material.NoActionBar" />
+</resources>

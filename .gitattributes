@@ -1,0 +1,14 @@
+# Normalise line endings on commit, as the kernel repository does.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary
+*.png binary
+*.jpg binary
+*.jar binary
+*.so binary
+*.a binary
+
+# Generated
+/app/build/generated/uniffi/** linguist-generated=true

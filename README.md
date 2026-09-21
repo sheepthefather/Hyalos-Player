@@ -1,0 +1,99 @@
+# HyalosPlayer
+
+Android 局域网媒体播放器。把 NAS 上的影片当作本地文件来浏览和播放。
+
+网络访问能力由独立的 Rust 内核 [Krystallos](https://github.com/sheepthefather/Krystallos) 提供，首个支持的协议是 SMB2/3。
+
+## 当前状态
+
+**工程骨架**。构建链路已经打通——Gradle 能编译 Rust 内核、生成 Kotlin 绑定、把 `.so` 打进 APK——但**还没有任何功能**：没有服务器配置、没有目录浏览、没有播放。界面是一个占位屏。
+
+| 部分 | 状态 |
+|---|---|
+| Gradle 工程 + Rust 构建链路 | ✅ |
+| Kotlin 绑定生成 | ✅ |
+| 服务器配置与连接 | ⬜ |
+| 目录浏览 | ⬜ |
+| 播放（Media3） | ⬜ |
+
+## 前置条件
+
+- **JDK 17+**（本机用 21）
+- **Android SDK**，含 NDK。`ANDROID_HOME` 指向 SDK 根目录
+- **Rust** 与三个 Android target：
+  ```bash
+  rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+  cargo install cargo-ndk
+  ```
+- **CMake 3.x / 4.x** —— Krystallos 构建 libsmb2 需要
+
+## 构建
+
+```bash
+git clone https://github.com/sheepthefather/Hyalos-Player.git
+cd Hyalos-Player
+./gradlew assembleDebug
+```
+
+**Krystallos 必须放在本仓库的旁边**（`../Krystallos`）。放在别处时：
+
+```bash
+./gradlew assembleDebug -Pkrystallos.dir=/path/to/Krystallos
+```
+
+## 构建链路
+
+```
+Krystallos (Rust)                     HyalosPlayer (Kotlin)
+─────────────────                     ─────────────────────
+cargo ndk -t arm64-v8a ...   ──┐
+                               │
+                    app/build/rustJniLibs/<abi>/libkrystallos_ffi.so
+                               │
+uniffi-bindgen generate        │
+       │                       │
+       └──> app/build/generated/uniffi/uniffi/krystallos_ffi/krystallos_ffi.kt
+                               │
+                        AGP 打包 APK
+```
+
+两个 Gradle task 串起来，都由 `assembleDebug` 自动触发：
+
+- `buildRust` —— 交叉编译内核到三个 ABI
+- `generateUniffiBindings` —— 从编译好的 `.so` 生成 Kotlin 绑定
+
+源码目录通过 **Variant API** 贡献给 AGP（`androidComponents.onVariants`），不是旧的 `android.sourceSets` DSL。AGP 9 会直接拒绝后者——它无法判断 `Provider` 指向的是生成文件还是静态文件，因而拒绝猜测。Variant API 让这个区别显式，而且生成目录的任务依赖由 AGP 自动接上。
+
+## 几个必须知道的约束
+
+这些是踩过的坑，改动构建配置前请先读：
+
+**1. 不要加 `org.jetbrains.kotlin.android` 插件。**
+
+AGP 9 内置 Kotlin 支持且默认启用，而独立的 Kotlin Android 插件与它的新 DSL **不兼容**——加上去会直接让构建失败。Kotlin 编译现在是 AGP 的一部分。
+
+**2. JNA 必须用 `aar` 变体，不是默认的 jar。**
+
+```kotlin
+implementation(variantOf(libs.jna) { artifactType("aar") })
+```
+
+生成的 UniFFI 绑定通过 JNA 的 direct mapping 加载 Rust 库。jar 里没有 `libjnidispatch.so`，用它会得到一个运行时的 `UnsatisfiedLinkError`——而且错误信息既不提 JNA 也不提变体问题。
+
+**3. `cargo ndk` 的 `-P 29` 不能省。**
+
+cargo-ndk 默认按 API 21 构建，低于本项目的 minSdk，产出的库会链接到更老的 libc。
+
+**4. release 构建不要 `strip = true`。**
+
+UniFFI 的元数据符号是只读数据，不在 `.dynsym` 里。完整 strip 会移除 `.symtab`，于是 `uniffi-bindgen` 在**真正要发布的产物**上报 `No UniFFI metadata found`，而 debug 构建却正常。Krystallos 的 release profile 用 `strip = "debuginfo"`。
+
+**5. 用 R8 时必须保留 JNA 的类。**
+
+见 `app/proguard-rules.pro`。JNA 是反射加载的，R8 看不到调用图，会把需要的类剥掉或改名——症状是只在 release 构建里出现的 `UnsatisfiedLinkError`。
+
+## 许可证
+
+GPL-3.0-or-later。见 [LICENSE](LICENSE)。
+
+依赖的 [Krystallos](https://github.com/sheepthefather/Krystallos) 同为 GPL-3.0，其中 vendored 的 libsmb2 是 LGPL-2.1-or-later。

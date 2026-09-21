@@ -1,0 +1,58 @@
+[versions]
+# Toolchain. AGP 9 compiles Kotlin itself — see the note on plugins below.
+agp = "9.4.1"
+kotlin = "2.4.20"
+
+# Android
+#
+# `compileSdk` must be at least 37: the Compose BOM this project uses pulls in
+# androidx artifacts compiled against API 37, and AGP refuses to build when a
+# dependency was compiled against a newer API than the app. It is independent of
+# `targetSdk`, which is what opts the app into new runtime behaviour, so
+# compiling against 37 does not change how the app behaves on older devices.
+compileSdk = "37"
+minSdk = "29"
+targetSdk = "36"
+
+# Compose. The BOM pins every androidx.compose.* artifact to a mutually tested
+# set, so the individual libraries below carry no version of their own.
+composeBom = "2026.09.00"
+activityCompose = "1.13.0"
+
+# Media3 is declared now but not yet used. It is the playback engine this
+# project is built around (Apache-2.0, and its DataSource contract is what
+# Krystallos' read_at shape was designed against), so having the version
+# recorded saves a round of research when playback lands.
+media3 = "1.11.1"
+
+# JNA must be the `aar` variant, not the jar. See app/build.gradle.kts.
+jna = "5.19.1"
+
+[libraries]
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+compose-ui = { group = "androidx.compose.ui", name = "ui" }
+compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+
+# The generated UniFFI bindings load the Rust library through JNA's direct
+# mapping, so this is not optional.
+jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+
+# No `org.jetbrains.kotlin.android` entry, deliberately.
+#
+# AGP 9 has built-in Kotlin support and enables it by default, and the
+# standalone Kotlin Android plugin is *incompatible* with the new DSL — applying
+# it fails the build outright. Kotlin compilation is part of AGP now, so a
+# normal Android module applies only the Android plugin.
+#
+# The Compose compiler plugin is still separate: it is a Kotlin compiler plugin,
+# not the Kotlin build integration.
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

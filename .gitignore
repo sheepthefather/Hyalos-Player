@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android
+*.apk
+*.aab
+*.ap_
+*.dex
+local.properties
+.cxx/
+captures/
+
+# Rust build output, which the Gradle tasks write here
+app/build/rustJniLibs/
+app/build/generated/uniffi/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Signing material
+*.jks
+*.keystore
+keystore.properties
