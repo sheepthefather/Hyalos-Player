@@ -1,7 +1,16 @@
-// The Rust kernel lives in a sibling repository. Override with
-// `-Pkrystallos.dir=<path>` when it is checked out somewhere else.
+/**
+ * Where the Krystallos kernel source lives.
+ *
+ * A git submodule, so that a recursive clone of this repository is enough to
+ * build it — the same arrangement Krystallos itself uses for libsmb2.
+ *
+ * `-Pkrystallos.dir=<path>` overrides it, for working on the kernel in its own
+ * checkout. Note that pointing at a submodule's *working tree*, as the default
+ * does, means uncommitted kernel edits are picked up by the next build; the
+ * pinned commit only decides what a fresh clone gets.
+ */
 val krystallosDir: String = (findProperty("krystallos.dir") as String?)
-    ?: rootProject.projectDir.parentFile.resolve("Krystallos").absolutePath
+    ?: rootProject.projectDir.resolve("vendor/krystallos").absolutePath
 
 plugins {
     alias(libs.plugins.android.application)
@@ -128,11 +137,30 @@ val buildRust = tasks.register<BuildRust>("buildRust") {
         "-p", "krystallos-ffi",
     )
 
-    // Re-run whenever the kernel's sources change. Watching the whole crate
-    // tree is heavier than watching the submodule pointer, but it means an
-    // edit-and-rebuild cycle during kernel work does the right thing.
-    inputs.dir(file("$krystallosDir/crates")).withPathSensitivity(PathSensitivity.RELATIVE)
-    inputs.file(file("$krystallosDir/Cargo.toml"))
+    // What the Rust build actually reads, declared so Gradle can skip the task
+    // when none of it changed.
+    //
+    // `crates/` and `Cargo.toml` alone were not enough. Two things the build
+    // depends on live outside them and would have gone unnoticed:
+    //
+    // - `Cargo.lock`, which decides dependency versions.
+    // - `vendor/libsmb2`, a *nested* submodule. Bumping its pointer changes the
+    //   C sources the kernel compiles, while leaving `crates/` byte-identical —
+    //   so the task would have been skipped and a stale library shipped.
+    //
+    // `RELATIVE` path sensitivity means the checkout's location does not affect
+    // the fingerprint. That is not a guess: the release build was measured to be
+    // byte-identical whether the kernel was built from a sibling checkout or
+    // from `vendor/`, because `strip = "debuginfo"` removes the path-dependent
+    // debug info. Moving the checkout should not force a rebuild.
+    inputs.files(
+        fileTree(krystallosDir) {
+            include("Cargo.toml", "Cargo.lock")
+            include("crates/**")
+            include("vendor/libsmb2/lib/**", "vendor/libsmb2/include/**")
+            include("vendor/libsmb2/CMakeLists.txt")
+        },
+    ).withPathSensitivity(PathSensitivity.RELATIVE)
 
     doFirst {
         if (!file(krystallosDir).isDirectory) {

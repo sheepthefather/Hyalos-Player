@@ -44,12 +44,36 @@ Android 局域网媒体播放器。本文说明各部分的职责、边界，以
 
 ---
 
+## 仓库结构
+
+```
+Hyalos-Player/                    Android 播放器
+└── vendor/krystallos/            ← git submodule，Rust 内核
+    └── vendor/libsmb2/           ← 嵌套 submodule，内核的 SMB 库
+```
+
+**两层嵌套**，所以克隆必须用 `git clone --recursive`。
+
+内核仍然是**独立仓库**，有自己完整的测试（165 个）和桌面 CLI。把它作为 submodule 而不是合并进来，是为了保住一条边界：**内核的全部功能都能在 Windows 上不经过 Android 验证**。协议层的 bug 不需要走「编译 APK → 装设备 → 手动操作」这条长回路。
+
+### 开发时的工作树与提交
+
+Gradle 构建的是 submodule 的**工作树**，不是某个提交快照。所以：
+
+- 在 `vendor/krystallos` 里改代码（**哪怕没提交**），下一次构建就会生效
+- 但 `git status` 会显示 submodule 指针变「脏」，这是正常的
+- 要让别人拿到你的内核改动，得先在 Krystallos 里提交并推送，再在这里提交指针变更
+
+这条与 Krystallos → libsmb2 的关系完全一致。
+
+---
+
 ## 构建链路
 
 ```
 cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -P 29
     -o app/build/rustJniLibs build --release -p krystallos-ffi
-                            │
+                            │            (cwd = vendor/krystallos)
                             ▼
             app/build/rustJniLibs/<abi>/libkrystallos_ffi.so
                             │
@@ -59,11 +83,23 @@ uniffi-bindgen generate --library <上面的 .so> --language kotlin
    app/build/generated/uniffi/uniffi/krystallos_ffi/krystallos_ffi.kt
 ```
 
-两个 Gradle task（`buildRust`、`generateUniffiBindings`）串起这条链，由 `assembleDebug` 自动触发。
+**Gradle 对 Rust 一无所知。** 它只是启动了一个叫 `cargo` 的外部程序，并把工作目录设成了 `vendor/krystallos`。两个仓库之间的全部接口就是两个目录：一个装满 `.so`，一个装着生成的 `.kt`。`dependencies { }` 里没有任何一条提到 Krystallos。
+
+任务之间的边有两个来源：
+
+| 边 | 来源 |
+|---|---|
+| `generateUniffiBindings` → `buildRust` | 手写的 `dependsOn` |
+| `mergeDebugJniLibFolders` → `buildRust` | AGP 从 `addGeneratedSourceDirectory` 推断 |
+| `compileDebugKotlin` → `generateUniffiBindings` | 同上 |
+
+第二条值得说明：最早用 `addStaticSourceDirectory` 时构建失败，报的是「`mergeDebugJniLibFolders` 使用了 `buildRust` 的输出但没有声明依赖」。**Gradle 知道那个目录是 `buildRust` 产出的，但不知道谁该等它。** 换成 `addGeneratedSourceDirectory` 就是明确告诉 AGP「这是生成目录，生产者是这个任务」，边就补上了。
+
+如果 Gradle 真有「语言级依赖」的概念，这个错误根本不会出现。
 
 ### 为什么源码目录走 Variant API
 
-`app/build.gradle.kts` 用 `androidComponents.onVariants` 而不是旧的 `android.sourceSets` DSL 贡献 `jniLibs` 与生成的 Kotlin 目录。
+`app/build.gradle.kts` 用 `androidComponents.onVariants` 而不是旧的 `android.sourceSets` DSL。
 
 **这不是风格偏好，是 AGP 9 的硬性要求**：旧 API 会直接拒绝 `Provider`，理由是它无法判断该目录存放的是生成文件（只读）还是静态文件（可读写），因而拒绝猜测。Variant API 把「静态」与「生成」区分成两个方法，而且**生成目录的任务依赖由 AGP 自动接上**——旧 API 不会。
 

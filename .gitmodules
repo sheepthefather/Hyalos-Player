@@ -1,0 +1,3 @@
+[submodule "vendor/krystallos"]
+	path = vendor/krystallos
+	url = https://github.com/sheepthefather/Krystallos.git

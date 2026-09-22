@@ -30,12 +30,29 @@ Android 局域网媒体播放器。把 NAS 上的影片当作本地文件来浏�
 ## 构建
 
 ```bash
-git clone https://github.com/sheepthefather/Hyalos-Player.git
+git clone --recursive https://github.com/sheepthefather/Hyalos-Player.git
 cd Hyalos-Player
 ./gradlew assembleDebug
 ```
 
-**Krystallos 必须放在本仓库的旁边**（`../Krystallos`）。放在别处时：
+**`--recursive` 不能省。** 内核 Krystallos 是一个 submodule，而它自己又内嵌 libsmb2 这个 submodule——**两层嵌套**，所以要递归拉取。已经克隆过但忘了 `--recursive` 的话：
+
+```bash
+git submodule update --init --recursive
+```
+
+两个 submodule 分别在：
+
+| 路径 | 内容 |
+|---|---|
+| `vendor/krystallos` | Rust 内核 |
+| `vendor/krystallos/vendor/libsmb2` | 内核依赖的 SMB 库 |
+
+### 同时开发内核时
+
+默认构建的是 submodule 的**工作树**，不是某个提交快照。所以在 `vendor/krystallos` 里改代码（哪怕没提交）下一次构建就会生效。
+
+若你在别处有一份独立的 Krystallos 检出：
 
 ```bash
 ./gradlew assembleDebug -Pkrystallos.dir=/path/to/Krystallos
@@ -57,10 +74,14 @@ uniffi-bindgen generate        │
                         AGP 打包 APK
 ```
 
-两个 Gradle task 串起来，都由 `assembleDebug` 自动触发：
+内核源码在 `vendor/krystallos`（submodule）。Gradle 只是**在它的目录里启动 `cargo`**——Gradle 本身对 Rust 一无所知，`dependencies { }` 里没有任何一条提到 Krystallos。
 
-- `buildRust` —— 交叉编译内核到三个 ABI
-- `generateUniffiBindings` —— 从编译好的 `.so` 生成 Kotlin 绑定
+两个 task 由 `assembleDebug` 自动触发，依赖是显式连起来的：
+
+- `buildRust` —— 交叉编译内核到三个 ABI。`generateUniffiBindings` 通过 `dependsOn` 显式依赖它。
+- `generateUniffiBindings` —— 从编译好的 `.so` 生成 Kotlin 绑定。
+
+而这两个 task 与 Android 构建之间的边是 **AGP 推断的**：`addGeneratedSourceDirectory` 告诉 AGP「这个目录由这个任务产出」，于是 `mergeDebugJniLibFolders` 和 `compileDebugKotlin` 会自动等它们。
 
 源码目录通过 **Variant API** 贡献给 AGP（`androidComponents.onVariants`），不是旧的 `android.sourceSets` DSL。AGP 9 会直接拒绝后者——它无法判断 `Provider` 指向的是生成文件还是静态文件，因而拒绝猜测。Variant API 让这个区别显式，而且生成目录的任务依赖由 AGP 自动接上。
 
