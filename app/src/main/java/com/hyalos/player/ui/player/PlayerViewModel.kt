@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -35,8 +36,8 @@ import kotlinx.coroutines.launch
 @OptIn(UnstableApi::class)
 class PlayerViewModel(
     private val container: AppContainer,
-    serverId: String,
-    path: String,
+    private val serverId: String,
+    private val path: String,
     /** Whether the queue comes from the server's playlist rather than the folder. */
     private val fromPlaylist: Boolean = false,
 ) : ViewModel() {
@@ -108,20 +109,57 @@ class PlayerViewModel(
         )
 
         if (path.isNotEmpty()) {
-            viewModelScope.launch { extendPlaylist(serverId, path) }
+            viewModelScope.launch {
+                if (fromPlaylist) {
+                    // A hand-built list is a request to play that list through,
+                    // so it does not consult the setting at all — not on the way
+                    // in, and not while it plays.
+                    extendPlaylist()
+                } else {
+                    // Watched rather than read once: the setting is a tap away
+                    // from the player, and one that only took effect on the next
+                    // film would look broken from here.
+                    container.settings.settings
+                        .map { it.autoPlayNext }
+                        .distinctUntilChanged()
+                        .collect { enabled -> applyAutoPlayNext(enabled) }
+                }
+            }
         }
+    }
+
+    /**
+     * Follow the setting while the film plays, not only when it starts.
+     *
+     * Turning it off drops the film's neighbours, so it plays to its end and
+     * stops — which is what the setting means, and what used to happen only if
+     * it had been off when the film was opened.
+     */
+    private suspend fun applyAutoPlayNext(enabled: Boolean) {
+        if (enabled) {
+            // Only when nothing is queued: extending twice would list the folder
+            // twice.
+            if (player.mediaItemCount <= 1) extendPlaylist()
+            return
+        }
+        // The tail first: removing what follows does not move the current item,
+        // where removing what precedes it would.
+        val current = player.currentMediaItemIndex
+        if (player.mediaItemCount > current + 1) {
+            player.removeMediaItems(current + 1, player.mediaItemCount)
+        }
+        if (current > 0) player.removeMediaItems(0, current)
     }
 
     /**
      * Add the queue around the film that is already playing.
      *
      * Two sources. A queue the user built by hand is a request to play that
-     * queue, in that order, so it is used as it stands — the auto-play-next
-     * setting has nothing to say about it. Otherwise the folder is the queue,
-     * and that setting is exactly what decides whether there is one: with it off
-     * nothing is added, the playlist holds one item, and the film simply ends.
+     * queue, in that order, so it is used as it stands. Otherwise the folder is
+     * the queue — whether there should be one at all is [applyAutoPlayNext]'s
+     * decision, not this function's.
      */
-    private suspend fun extendPlaylist(serverId: String, path: String) {
+    private suspend fun extendPlaylist() {
         if (fromPlaylist) {
             // The order is the point of a hand-built list, so it is not sorted.
             // Matched by path rather than by name: it is the exact string that
@@ -134,8 +172,6 @@ class PlayerViewModel(
         }
 
         val settings = container.settings.settings.first()
-        if (!settings.autoPlayNext) return
-
         val directory = RemotePath.parent(path) ?: RemotePath.ROOT
         val entries = try {
             container.sessions.list(serverId, directory)

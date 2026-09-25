@@ -1,5 +1,6 @@
 package com.hyalos.player.ui.browser
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,6 +75,11 @@ fun BrowserScreen(
     val sortAscending by viewModel.sortAscending.collectAsStateWithLifecycle()
     val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
     val grid = layout == BrowserLayout.GRID
+
+    // While something is selected, back means "leave selection mode". Without
+    // this it climbs out of the directory instead, taking the selection with it
+    // — which reads as having lost it, or worse, as having done something.
+    BackHandler(enabled = viewModel.selecting) { viewModel.clearSelection() }
 
     // Dialogs and the progress indicator live here rather than in the listing,
     // so they survive a refresh that replaces every item.

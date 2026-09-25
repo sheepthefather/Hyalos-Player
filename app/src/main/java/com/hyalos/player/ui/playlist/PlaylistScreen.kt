@@ -1,5 +1,6 @@
 package com.hyalos.player.ui.playlist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -131,6 +132,11 @@ fun PlaylistScreen(
                 }
         }
     }
+
+    // While something is selected, back means "leave selection mode" — as in the
+    // browser. Without this it pops back to the server list and the selection
+    // goes with it.
+    BackHandler(enabled = viewModel.selecting) { viewModel.clearSelection() }
 
     RemoveDialog(viewModel, serverName)
 }
