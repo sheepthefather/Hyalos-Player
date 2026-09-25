@@ -94,6 +94,15 @@ class BrowserViewModel(
 
     data class Report(val operation: Operation, val result: OperationResult)
 
+    /**
+     * How the last add-to-playlist turned out.
+     *
+     * Kept apart from [Report]: this is not a file operation, nothing in it fails
+     * halfway, and [OperationResult]'s wording — "already exists, not
+     * overwritten" — is about pasting files.
+     */
+    data class PlaylistNotice(val added: Int, val skipped: Int)
+
     /** A delete waiting on confirmation, and how much it would actually remove. */
     data class DeletePrompt(val items: List<RemoteItem>, val total: Int, val truncated: Boolean)
 
@@ -113,6 +122,10 @@ class BrowserViewModel(
 
     /** The last finished operation, for the report at the bottom of the screen. */
     var report by mutableStateOf<Report?>(null)
+        private set
+
+    /** The last add-to-playlist, for the confirmation at the bottom of the screen. */
+    var playlistNotice by mutableStateOf<PlaylistNotice?>(null)
         private set
 
     var renaming by mutableStateOf<BrowserItem?>(null)
@@ -220,6 +233,31 @@ class BrowserViewModel(
     fun cutSelected() {
         container.clipboard.cut(selectedItems())
         clearSelection()
+    }
+
+    /**
+     * Put the selected files into this server's playlist.
+     *
+     * A batch action like copy and cut, so it carries no "exactly one selected"
+     * condition — that belongs to rename alone.
+     *
+     * Folders are dropped: a playlist holds files, and the player can only open a
+     * file. Whatever is dropped is counted and reported rather than passed over
+     * in silence, so the numbers on screen add up to what was selected.
+     */
+    fun addToPlaylist() {
+        val chosen = selectedItems()
+        if (chosen.isEmpty()) return
+        val paths = chosen.filterNot { it.isDirectory }.map { it.path }
+        viewModelScope.launch {
+            val added = if (paths.isEmpty()) 0 else container.playlists.add(serverId, paths)
+            playlistNotice = PlaylistNotice(added = added, skipped = chosen.size - added)
+            clearSelection()
+        }
+    }
+
+    fun dismissPlaylistNotice() {
+        playlistNotice = null
     }
 
     fun paste() {

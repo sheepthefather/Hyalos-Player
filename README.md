@@ -17,6 +17,7 @@ Android 局域网媒体播放器。把 NAS 上的影片当作本地文件来浏�
 | 文件操作（重命名、删除、复制、剪切粘贴） | ✅ |
 | 视频缩略图（含磁盘缓存与设置页） | ✅ |
 | 播放（Media3 + `KrystallosDataSource`、连播、画面比例） | ✅ |
+| 自建播放列表（每台服务器一个，跨目录按加入顺序连播） | ✅ |
 | 后台播放 / MediaSession、续播、字幕、局域网发现 | ⬜ |
 
 **在模拟器上跑要注意**：AVD 需以 `-feature -HardwareDecoder` 启动，否则所有视频都渲染成纯绿色。原因与验证方式见 [ARCHITECTURE.md](ARCHITECTURE.md#已知风险)。

@@ -40,6 +40,21 @@ sealed interface Route : NavKey {
     @Serializable
     data class Browse(val serverId: String, val path: String) : Route
 
+    /**
+     * `fromPlaylist` says where the queue comes from: `false` is the folder the
+     * file sits in, `true` is the server's own playlist.
+     *
+     * Defaulted rather than required so a back stack saved by an earlier version
+     * — which has no such field — restores straight into folder mode.
+     */
     @Serializable
-    data class Play(val serverId: String, val path: String) : Route
+    data class Play(
+        val serverId: String,
+        val path: String,
+        val fromPlaylist: Boolean = false,
+    ) : Route
+
+    /** One server's playlist. The list belongs to a server, so the id is the key. */
+    @Serializable
+    data class Playlist(val serverId: String) : Route
 }

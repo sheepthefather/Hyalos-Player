@@ -128,6 +128,20 @@
     <string name="browser_root">根目录</string>
     <string name="browser_unplayable">暂不支持播放这种文件</string>
 
+    <!-- 播放列表（每台服务器一个） -->
+    <string name="playlist_title">播放列表</string>
+    <string name="action_add_to_playlist">加入播放列表</string>
+    <string name="playlist_play_all">播放全部</string>
+    <string name="playlist_empty">播放列表是空的</string>
+    <string name="playlist_empty_hint">浏览目录时长按选中视频，再点「加入播放列表」</string>
+    <string name="playlist_remove">移出播放列表</string>
+    <string name="playlist_clear">清空</string>
+    <string name="playlist_clear_title">清空播放列表？</string>
+    <string name="playlist_clear_body">将从「%1$s」的播放列表中移除 %2$d 项。此操作不可撤销。</string>
+    <string name="playlist_added">已加入播放列表</string>
+    <string name="playlist_added_some">已加入 %1$d 项，%2$d 项未加入</string>
+    <string name="playlist_added_none">没有可加入的项</string>
+
     <!-- 播放 -->
     <string name="player_error_not_found">文件已不存在</string>
     <string name="player_error_permission">没有读取这个文件的权限</string>

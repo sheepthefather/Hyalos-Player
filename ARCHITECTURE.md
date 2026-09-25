@@ -112,7 +112,7 @@ implementation(variantOf(libs.jna) { artifactType("aar") })
 | 包 | 职责 |
 |---|---|
 | 根 | `HyalosApp` 持有 `AppContainer`：手写的依赖图，进程级单例 |
-| `data/` | 服务器列表（`ServerRepository`）、加密凭据（`CredentialStore`）、DataStore 的 JSON 序列化器 |
+| `data/` | 服务器列表（`ServerRepository`）、自建播放列表（`PlaylistRepository`）、加密凭据（`CredentialStore`）、DataStore 的 JSON 序列化器 |
 | `kernel/` | 对 UniFFI 绑定的薄封装：会话管理、路径拼接、关闭辅助 |
 | `playback/` | Media3 数据源（见「播放数据面」） |
 | `files/` | 重命名、删除、复制、剪切/粘贴（`FileOperations`），部分失败如实报告（见「文件操作」） |
@@ -218,6 +218,18 @@ ExoPlayer ─ ProgressiveMediaSource
 **播放列表的顺序与浏览页一致**，因为它复用同一个 `EntrySorting.playableInOrder`（排序键、方向、中文与数字排序、可播放判定都是同一份）。两边不一致的话，用户看到的顺序与实际播放的顺序会不同——那种 bug 只在连播时暴露，且看起来像「跳了一集」。
 
 **画面比例**（适应 / 拉伸 / 裁切）对应 `PlayerView.resizeMode` 的 FIT / FILL / ZOOM。默认「适应」：另两个一个会畸变、一个会裁掉画面，应该是用户主动选的，而不是打开影片就撞上的。它应用在 `AndroidView` 的 `update` 里而不是 `factory`——`factory` 只跑一次，之后改设置就再也到不了那个 View。
+
+### 播放列表
+
+每台服务器一个自建列表，条目是路径，按加入顺序连播。它与「目录连播」是两条**独立的队列来源**：从列表点播时队列就是列表，`PlayerViewModel` 不去列举父目录——`extendPlaylist` 里一个分支的分岔就是这两种模式的全部区别。
+
+**为什么按服务器分，而不是全局一个。** 播放层一个播放器只持有一条专属会话：`PlaybackConnection` 的 `connect` 是 `suspend () -> Session`，serverId 在 `PlayerViewModel` 构造时就被闭包吃掉了；`ReaderSource.reader` 只收 path；`KrystallosDataSource` 拿到了完整的 `dataSpec.uri` 却从不读 `uri.authority`。于是跨服务器的条目会被拿去问**当前**服务器——路径恰好也存在的话**静默播错文件**，只有不存在时才报 `NotFound`。前者才是危险的，而且不留痕迹。按服务器分列表从根上排除了这种条目；缩略图早就因为同一条约束做了「每服务器一个 source」。
+
+**从列表播放不理会「自动播放下一个」。** 那个设置管的是「从目录点一个文件播放」的场景；用户从列表里点播，本身就是要求按这个列表连着播。让同一个开关在两处含义不同，比让它只管一处更难解释。
+
+**条目只存路径**，文件名与所在目录都现算。存下来的名字会在文件被改名之后继续说谎，而它旁边的路径已经指向别处。
+
+**加入顺序就是播放顺序**，不排序——这正是它与目录连播的差别。重复加入的条目被跳过，且**跳过的数量会如实报告**，不假装全都加进去了：同名的失败要报，这里同样。文件夹被排除在外（列表只装文件），排除的数量也计入那个报告。
 
 ### 文件操作
 

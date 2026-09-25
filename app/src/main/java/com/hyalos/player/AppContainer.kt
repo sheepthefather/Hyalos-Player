@@ -2,6 +2,7 @@ package com.hyalos.player
 
 import android.content.Context
 import com.hyalos.player.data.CredentialStore
+import com.hyalos.player.data.PlaylistRepository
 import com.hyalos.player.data.ServerRepository
 import com.hyalos.player.data.SettingsRepository
 import com.hyalos.player.files.FileClipboard
@@ -45,6 +46,7 @@ class AppContainer(context: Context) {
     val servers = ServerRepository.create(appContext)
     val credentials = CredentialStore.create(appContext)
     val settings = SettingsRepository.create(appContext)
+    val playlists = PlaylistRepository.create(appContext)
     val sessions = SessionManager({ kernel }, servers, credentials, appScope)
 
     private val thumbnailCache = ThumbnailCache(File(appContext.cacheDir, THUMBNAIL_DIR))

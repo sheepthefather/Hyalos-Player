@@ -11,6 +11,8 @@ import com.hyalos.player.AppContainer
 import com.hyalos.player.ui.browser.BrowserScreen
 import com.hyalos.player.ui.browser.BrowserViewModel
 import com.hyalos.player.ui.player.PlayerScreen
+import com.hyalos.player.ui.playlist.PlaylistScreen
+import com.hyalos.player.ui.playlist.PlaylistViewModel
 import com.hyalos.player.ui.player.PlayerViewModel
 import com.hyalos.player.ui.serveredit.ServerEditScreen
 import com.hyalos.player.ui.serveredit.ServerEditViewModel
@@ -45,6 +47,7 @@ fun AppNavigation(container: AppContainer) {
                     viewModel = viewModel { ServerListViewModel(container) },
                     onOpen = { backStack.add(Route.Browse(it.id, it.startPath)) },
                     onAdd = { backStack.add(Route.EditServer()) },
+                    onOpenPlaylist = { backStack.add(Route.Playlist(it.id)) },
                     onEdit = { backStack.add(Route.EditServer(it.id)) },
                     onOpenSettings = { backStack.add(Route.Settings) },
                 )
@@ -94,7 +97,18 @@ fun AppNavigation(container: AppContainer) {
             }
             entry<Route.Play> { key ->
                 PlayerScreen(
-                    viewModel = viewModel { PlayerViewModel(container, key.serverId, key.path) },
+                    viewModel = viewModel {
+                        PlayerViewModel(container, key.serverId, key.path, key.fromPlaylist)
+                    },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<Route.Playlist> { key ->
+                PlaylistScreen(
+                    viewModel = viewModel { PlaylistViewModel(container, key.serverId) },
+                    // Playing from the list means the list is the queue, not the
+                    // folder the chosen film happens to sit in.
+                    onPlay = { backStack.add(Route.Play(key.serverId, it, fromPlaylist = true)) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }

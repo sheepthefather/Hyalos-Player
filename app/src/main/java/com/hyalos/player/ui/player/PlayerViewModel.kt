@@ -34,6 +34,8 @@ class PlayerViewModel(
     private val container: AppContainer,
     serverId: String,
     path: String,
+    /** Whether the queue comes from the server's playlist rather than the folder. */
+    private val fromPlaylist: Boolean = false,
 ) : ViewModel() {
 
     val title: String = RemotePath.name(path)
@@ -75,18 +77,26 @@ class PlayerViewModel(
     }
 
     /**
-     * Add the folder's other playable files around the one being played.
+     * Add the queue around the film that is already playing.
      *
-     * Inserted rather than replaced: `setMediaItems` would restart playback, and
-     * the point is that this arrives *after* the film has started. Media3 keeps
-     * the current item current as neighbours are added, so the index shifts
-     * rather than the playback.
-     *
-     * With auto-play-next off nothing is added, so the playlist holds one item
-     * and the film simply ends — which is what the setting means, and it leaves
-     * the previous/next buttons with nothing to do, as expected.
+     * Two sources. A queue the user built by hand is a request to play that
+     * queue, in that order, so it is used as it stands — the auto-play-next
+     * setting has nothing to say about it. Otherwise the folder is the queue,
+     * and that setting is exactly what decides whether there is one: with it off
+     * nothing is added, the playlist holds one item, and the film simply ends.
      */
     private suspend fun extendPlaylist(serverId: String, path: String) {
+        if (fromPlaylist) {
+            // The order is the point of a hand-built list, so it is not sorted.
+            // Matched by path rather than by name: it is the exact string that
+            // was stored, and two folders may hold the same file name.
+            val entries = container.playlists.playlist(serverId).first()
+            val index = entries.indexOf(path)
+            if (index < 0) return
+            addAround(index, entries.map { MediaItem.fromUri(KrystallosUri.of(serverId, it)) })
+            return
+        }
+
         val settings = container.settings.settings.first()
         if (!settings.autoPlayNext) return
 
@@ -96,7 +106,7 @@ class PlayerViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // The film is already playing; a missing playlist is not worth
+            // The film is already playing; a missing queue is not worth
             // interrupting it for.
             return
         }
@@ -112,9 +122,22 @@ class PlayerViewModel(
         if (index < 0) return // The server listed something other than what we opened.
 
         val items = playable.map { MediaItem.fromUri(KrystallosUri.of(serverId, RemotePath.join(directory, it.name))) }
-        // Stopped in case the film ended while the listing was in flight: adding
-        // items to a finished playlist does not restart it, and the user would
-        // be left looking at the end of a film with a full queue behind it.
+        addAround(index, items)
+    }
+
+    /**
+     * Put [items] either side of the one at [index], which is already playing.
+     *
+     * Inserted rather than replaced: `setMediaItems` would restart playback, and
+     * the point is that this arrives *after* the film has started. Media3 keeps
+     * the current item current as neighbours are added, so the index shifts
+     * rather than the playback.
+     *
+     * The `play` at the end covers the film having ended while the queue was in
+     * flight: adding items to a finished playlist does not restart it, and the
+     * user would be left looking at the end of a film with a full queue behind it.
+     */
+    private fun addAround(index: Int, items: List<MediaItem>) {
         val wasPlaying = player.isPlaying
         player.addMediaItems(0, items.subList(0, index))
         player.addMediaItems(items.subList(index + 1, items.size))

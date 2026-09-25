@@ -100,6 +100,7 @@ fun BrowserScreen(
     DeleteDialog(viewModel)
     BusyDialog(viewModel.busy)
     ReportSnackbar(viewModel, snackbar)
+    PlaylistSnackbar(viewModel, snackbar)
 
     Scaffold(
         topBar = {
@@ -323,6 +324,10 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
             IconButton(onClick = viewModel::cutSelected) {
                 Icon(painterResource(R.drawable.ic_cut), stringResource(R.string.action_cut))
             }
+            // Before delete: the one destructive action stays last.
+            IconButton(onClick = viewModel::addToPlaylist) {
+                Icon(painterResource(R.drawable.ic_playlist), stringResource(R.string.action_add_to_playlist))
+            }
             IconButton(onClick = viewModel::askDelete) {
                 Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.action_delete))
             }
@@ -423,6 +428,21 @@ private fun ReportSnackbar(viewModel: BrowserViewModel, host: SnackbarHostState)
     LaunchedEffect(report) {
         host.showSnackbar(text)
         viewModel.dismissReport()
+    }
+}
+
+/** Confirms an add to the playlist, including what did not go in. */
+@Composable
+private fun PlaylistSnackbar(viewModel: BrowserViewModel, host: SnackbarHostState) {
+    val notice = viewModel.playlistNotice ?: return
+    val text = when {
+        notice.added == 0 -> stringResource(R.string.playlist_added_none)
+        notice.skipped == 0 -> stringResource(R.string.playlist_added)
+        else -> stringResource(R.string.playlist_added_some, notice.added, notice.skipped)
+    }
+    LaunchedEffect(notice) {
+        host.showSnackbar(text)
+        viewModel.dismissPlaylistNotice()
     }
 }
 

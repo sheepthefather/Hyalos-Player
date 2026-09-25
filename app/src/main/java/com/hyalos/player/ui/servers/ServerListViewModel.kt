@@ -19,6 +19,9 @@ class ServerListViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.servers.delete(server.id)
             container.credentials.remove(server.id)
+            // The playlist goes with it: its entries are paths on that server,
+            // and nothing else can ever resolve them again.
+            container.playlists.forget(server.id)
             container.forgetServer(server.id)
         }
     }
