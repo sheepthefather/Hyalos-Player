@@ -19,7 +19,7 @@ class ServerListViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             container.servers.delete(server.id)
             container.credentials.remove(server.id)
-            container.sessions.invalidate(server.id)
+            container.forgetServer(server.id)
         }
     }
 }

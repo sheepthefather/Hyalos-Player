@@ -78,6 +78,9 @@ media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "medi
 # version is recorded alongside the rest of Media3.
 media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 media3-test-utils = { group = "androidx.media3", name = "media3-test-utils", version.ref = "media3" }
+# FrameExtractor — pulls a decoded frame out of a video without building a player
+# of our own. Depends on media3-exoplayer and media3-effect.
+media3-inspector-frame = { group = "androidx.media3", name = "media3-inspector-frame", version.ref = "media3" }
 
 tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }

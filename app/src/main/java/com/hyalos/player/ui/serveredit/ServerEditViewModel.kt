@@ -121,7 +121,7 @@ class ServerEditViewModel(
             container.servers.upsert(config)
             if (form.password.isNotEmpty()) container.credentials.setPassword(config.id, form.password)
             // The cached session was opened with the old settings.
-            container.sessions.invalidate(config.id)
+            container.forgetServer(config.id)
             saved = true
         }
     }

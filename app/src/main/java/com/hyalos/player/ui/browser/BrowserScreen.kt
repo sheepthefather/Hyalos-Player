@@ -1,7 +1,10 @@
 package com.hyalos.player.ui.browser
 
+import android.graphics.Bitmap
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +12,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -93,7 +102,7 @@ fun BrowserScreen(
                 if (state.items.isEmpty()) {
                     CenteredMessage(stringResource(R.string.browser_empty))
                 } else {
-                    Entries(state.items) { item ->
+                    Entries(state.items, viewModel::thumbnailFor) { item ->
                         val path = RemotePath.join(viewModel.path, item.name)
                         when {
                             item.kind == BrowserItem.Kind.DIRECTORY -> onOpenDirectory(path)
@@ -108,19 +117,63 @@ fun BrowserScreen(
 }
 
 @Composable
-private fun Entries(items: List<BrowserItem>, onClick: (BrowserItem) -> Unit) {
+private fun Entries(
+    items: List<BrowserItem>,
+    loadThumbnail: suspend (BrowserItem) -> Bitmap?,
+    onClick: (BrowserItem) -> Unit,
+) {
     val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize()) {
         items(items, key = { it.name }) { item ->
             ListItem(
                 modifier = Modifier.clickable { onClick(item) },
-                leadingContent = { Icon(painterResource(item.icon()), null) },
+                leadingContent = { LeadingContent(item, loadThumbnail) },
                 headlineContent = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                 supportingContent = item.details(context)?.let { { Text(it) } },
             )
         }
     }
 }
+
+/**
+ * The row's leading slot: a video's frame, or an icon for everything else.
+ *
+ * Every row uses the same 16:9 box so that list items are all the same height —
+ * the box is shorter than a two-line row's minimum, so nothing shifts as
+ * thumbnails arrive and replace the placeholder.
+ *
+ * [produceState] is what makes the extraction lazy: a row composes when it
+ * scrolls into view and is cancelled when it leaves, so no frame is ever pulled
+ * for a film nobody is looking at.
+ */
+@Composable
+private fun LeadingContent(item: BrowserItem, loadThumbnail: suspend (BrowserItem) -> Bitmap?) {
+    val icon = painterResource(item.icon())
+    Box(
+        modifier = Modifier
+            .size(width = THUMBNAIL_WIDTH, height = THUMBNAIL_HEIGHT)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(4.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        val bitmap by produceState<Bitmap?>(initialValue = null, item.name) {
+            value = loadThumbnail(item)
+        }
+        val frame = bitmap
+        if (frame == null) {
+            Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            Image(
+                bitmap = frame.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(4.dp)),
+            )
+        }
+    }
+}
+
+private val THUMBNAIL_WIDTH = 64.dp
+private val THUMBNAIL_HEIGHT = 36.dp
 
 /** Every ancestor of [path], tappable. The root is labelled with the server's name. */
 @Composable

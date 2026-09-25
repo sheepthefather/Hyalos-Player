@@ -115,6 +115,7 @@ implementation(variantOf(libs.jna) { artifactType("aar") })
 | `data/` | 服务器列表（`ServerRepository`）、加密凭据（`CredentialStore`）、DataStore 的 JSON 序列化器 |
 | `kernel/` | 对 UniFFI 绑定的薄封装：会话管理、路径拼接、关闭辅助 |
 | `playback/` | Media3 数据源（见「播放数据面」） |
+| `thumbnails/` | 视频缩略图：取帧、磁盘缓存与淘汰（见「缩略图」） |
 | `ui/` | Compose 界面，按屏分子包，每屏一个 ViewModel |
 
 **依赖注入是手写的，不用 Hilt**：依赖图只有几个对象，而 Hilt 需要 KSP，KSP 与 AGP 9 内置 Kotlin 的配合是又一个可能出错的点——这个构建里已经有一整条 Rust 工具链了。
@@ -190,6 +191,42 @@ ExoPlayer ─ ProgressiveMediaSource
 **用 `PlayerView` 而非 Compose 版 `Player`**：后者在 Media3 1.11 仍是 `@ExperimentalApi`，且没有控制条自动隐藏、缓冲指示器与音轨选择——NAS 上的电影常有多条音轨，缺音轨选择直接影响使用。`ExoPlayer` 放在 ViewModel 里，旋转屏幕不重建也不重连。
 
 **测试**继承 Media3 官方的 `DataSourceContractTest`（22 项契约），内核换成内存里的假 `ReaderSource`——DataSource 依赖接口而非 `Session`，正是为此。
+
+---
+
+## 缩略图
+
+浏览列表为视频显示一帧画面。取帧用 Media3 的 `FrameExtractor`（`media3-inspector-frame`），
+它的 `Builder` 接受一个 `MediaSource.Factory`，所以直接复用 `KrystallosDataSource`——
+**没有新的协议代码**，和播放走同一条数据通路。
+
+**难点是成本，不是取帧本身。** 一帧要读容器索引（MP4 的 `moov` 常在文件尾、MKV 的 Cues
+同理）再读一帧数据，所以：
+
+- **读窗口 256 KiB，而不是播放用的 1 MiB。** 取帧只读索引加一帧，用播放的窗口会让每个
+  缩略图的网络流量翻四倍。
+- **只给可见行取。** 行的 `produceState` 在滚入时启动、滚出时取消。取消只停止*等待*；
+  已经开始的取帧跑完并落缓存——那些字节已经拉回来了，丢掉只会让下次再付一遍。
+- **先缩放到 320 宽再存。** `getThumbnail()` 返回的是**全分辨率帧**：原样存会让一张缩略图
+  占约 120 KB，内存里更是 8 MiB 的位图，几张就撑满内存缓存。缩放后约 10–20 KB。
+- **失败分两类。** 格式或解码类（容器/编解码器超出设备能力）记入负缓存，不再重试；
+  网络类（`ConnectionLost`、超时、`NotFound`）**不记**——记了会让一次掉线把整个目录的缩略图
+  永久毁掉。**默认是不记**，只有能明确归咎于文件的才写下来。
+
+**并发 2 条 lane，每条一个 `HandlerThread`。** `FrameExtractor` 要求单实例单线程访问，而其
+内部会构造 `ExoPlayer` 并触及 Looper——`HandlerThread` 两种情况都满足。这一点在写任何设计
+之前先用一个 spike 验证过（`FrameExtractorSpikeTest`）。每条 lane 有**自己的会话**
+（`ThumbnailSource`），且**取完即关文件**：与 `PlaybackConnection` 恰好相反——那个类为播放
+保留句柄是必要的（每次 seek 都要重开），而缩略图是一部片读一次，在 NAS 上留几百个句柄毫无好处。
+
+**缓存的图片，不是视频数据。** 磁盘存每部片一张 JPEG，内存存解码后的位图。淘汰规则：
+总量在内存里增量维护（不每次扫盘）、超限淘汰到上限的 **90%** 而非刚好不超（否则下一次写入
+又要淘汰，每次写入都退化成一次删除）、以文件 mtime 作「最后使用时间」（读时打点，所以
+体现的是真实使用顺序而非写入顺序）、负缓存标记按 1 KB 名义计入（它们实际 0 字节但占 inode，
+不计就永不淘汰）。上限为 0 表示**关闭缩略图并清空缓存**。
+
+设置页可调上限（默认 100 MB，滑杆 0–1000 MB，更大的值手动输入）。两个控件都**只在用户结束
+操作时写入**——存值会触发淘汰、淘汰要遍历缓存目录，一次拖动写几十次是不可接受的。
 
 ---
 

@@ -41,9 +41,18 @@ import java.io.InterruptedIOException
  *   dropped off the network for a moment heals without the user noticing.
  */
 @OptIn(UnstableApi::class)
-class KrystallosDataSource(private val source: ReaderSource) : BaseDataSource(/* isNetwork = */ true) {
+class KrystallosDataSource(
+    private val source: ReaderSource,
+    /**
+     * How much is fetched per round-trip. Playback wants the [ChunkedReader]
+     * default; thumbnail extraction wants far less, because it reads a
+     * container index and one frame rather than streaming a whole film — at the
+     * playback window each thumbnail would pull a mebibyte off the network.
+     */
+    windowSize: Int = ChunkedReader.DEFAULT_WINDOW,
+) : BaseDataSource(/* isNetwork = */ true) {
 
-    private val chunks = ChunkedReader()
+    private val chunks = ChunkedReader(windowSize)
     private var uri: Uri? = null
     private var reader: RandomReader? = null
     private var position = 0L
@@ -127,8 +136,11 @@ class KrystallosDataSource(private val source: ReaderSource) : BaseDataSource(/*
         throw e.toDataSourceException()
     }
 
-    class Factory(private val source: ReaderSource) : DataSource.Factory {
-        override fun createDataSource(): DataSource = KrystallosDataSource(source)
+    class Factory(
+        private val source: ReaderSource,
+        private val windowSize: Int = ChunkedReader.DEFAULT_WINDOW,
+    ) : DataSource.Factory {
+        override fun createDataSource(): DataSource = KrystallosDataSource(source, windowSize)
     }
 }
 

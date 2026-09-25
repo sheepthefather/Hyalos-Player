@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
+import com.hyalos.player.kernel.RemotePath
+import com.hyalos.player.thumbnails.ThumbnailKey
 import com.hyalos.player.ui.common.UiError
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
@@ -51,6 +53,26 @@ class BrowserViewModel(
     fun refresh() = load(refresh = true)
 
     fun retry() = load()
+
+    /**
+     * The thumbnail for [item], or `null` if there is none to show.
+     *
+     * Called from the row's composition, so it runs only while that row is on
+     * screen and is cancelled when it scrolls away. The key carries the size and
+     * modification time, so a file that is replaced gets a fresh frame rather
+     * than the old film's.
+     */
+    suspend fun thumbnailFor(item: BrowserItem): android.graphics.Bitmap? {
+        if (item.kind != BrowserItem.Kind.VIDEO) return null
+        return container.thumbnails.load(
+            ThumbnailKey(
+                serverId = serverId,
+                path = RemotePath.join(path, item.name),
+                size = item.size,
+                modifiedMs = item.modifiedMs,
+            ),
+        )
+    }
 
     private fun load(refresh: Boolean = false) {
         job?.cancel()

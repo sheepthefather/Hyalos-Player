@@ -40,12 +40,22 @@ fun ServerListScreen(
     onOpen: (ServerConfig) -> Unit,
     onAdd: () -> Unit,
     onEdit: (ServerConfig) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val servers by viewModel.servers.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ServerConfig?>(null) }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.servers_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.servers_title)) },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.settings_open))
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = onAdd) {
                 Icon(painterResource(R.drawable.ic_add), stringResource(R.string.server_add))

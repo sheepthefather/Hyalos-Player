@@ -16,6 +16,8 @@ import com.hyalos.player.ui.serveredit.ServerEditScreen
 import com.hyalos.player.ui.serveredit.ServerEditViewModel
 import com.hyalos.player.ui.servers.ServerListScreen
 import com.hyalos.player.ui.servers.ServerListViewModel
+import com.hyalos.player.ui.settings.SettingsScreen
+import com.hyalos.player.ui.settings.SettingsViewModel
 
 @Composable
 fun AppNavigation(container: AppContainer) {
@@ -39,6 +41,13 @@ fun AppNavigation(container: AppContainer) {
                     onOpen = { backStack.add(Route.Browse(it.id, it.startPath)) },
                     onAdd = { backStack.add(Route.EditServer()) },
                     onEdit = { backStack.add(Route.EditServer(it.id)) },
+                    onOpenSettings = { backStack.add(Route.Settings) },
+                )
+            }
+            entry<Route.Settings> {
+                SettingsScreen(
+                    viewModel = viewModel { SettingsViewModel(container) },
+                    onBack = { backStack.removeLastOrNull() },
                 )
             }
             entry<Route.EditServer> { key ->

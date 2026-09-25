@@ -15,6 +15,9 @@ sealed interface Route : NavKey {
     @Serializable
     data object Servers : Route
 
+    @Serializable
+    data object Settings : Route
+
     /** `serverId == null` adds a new server. */
     @Serializable
     data class EditServer(val serverId: String? = null) : Route

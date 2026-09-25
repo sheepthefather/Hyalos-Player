@@ -51,6 +51,17 @@
     <string name="problem_share_invalid">共享名只填第一级，子目录请写在「起始目录」里</string>
     <string name="problem_start_path_invalid">起始目录需以 / 开头</string>
 
+    <!-- 设置 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_open">设置</string>
+    <string name="settings_thumbnails">视频缩略图</string>
+    <string name="settings_cache_limit">缓存上限</string>
+    <string name="settings_cache_off">关闭</string>
+    <string name="settings_cache_custom">自定义 (MB)</string>
+    <string name="settings_cache_usage">已用 %1$s，上限 %2$s</string>
+    <string name="settings_cache_clear">清除缓存</string>
+    <string name="settings_cache_hint">浏览目录时会为视频取一帧作为缩略图并缓存，下次进同一目录无需重新取。滑块拉到「关闭」则不再生成，并清空已有缓存。</string>
+
     <!-- 错误 -->
     <string name="error_auth">认证失败，请检查用户名和密码</string>
     <string name="error_connection">无法连接到服务器，或连接已中断</string>
