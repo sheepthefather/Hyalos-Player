@@ -100,7 +100,17 @@ private fun Form(viewModel: ServerEditViewModel, modifier: Modifier) {
             label = R.string.field_host,
             placeholder = R.string.field_host_hint,
             keyboardType = KeyboardType.Uri,
-            error = problem.takeIf { it == Problem.HOST_EMPTY || it == Problem.HOST_INVALID },
+            error = problem.takeIf {
+                it == Problem.HOST_EMPTY || it == Problem.HOST_INVALID || it == Problem.PORT_IN_HOST
+            },
+        )
+        Field(
+            value = form.port,
+            onChange = { v -> viewModel.update { it.copy(port = v) } },
+            label = R.string.field_port,
+            placeholder = R.string.field_port_hint,
+            keyboardType = KeyboardType.Number,
+            error = problem.takeIf { it == Problem.PORT_INVALID },
         )
         Field(
             value = form.share,
@@ -234,7 +244,9 @@ private fun Problem.message(): Int = when (this) {
     Problem.NAME_EMPTY -> R.string.problem_name_empty
     Problem.HOST_EMPTY -> R.string.problem_host_empty
     Problem.HOST_INVALID -> R.string.problem_host_invalid
+    Problem.PORT_IN_HOST -> R.string.problem_port_in_host
     Problem.SHARE_EMPTY -> R.string.problem_share_empty
     Problem.SHARE_INVALID -> R.string.problem_share_invalid
     Problem.START_PATH_INVALID -> R.string.problem_start_path_invalid
+    Problem.PORT_INVALID -> R.string.problem_port_invalid
 }

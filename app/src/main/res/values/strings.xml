@@ -26,6 +26,8 @@
     <string name="field_name">名称</string>
     <string name="field_host">地址</string>
     <string name="field_host_hint">IP 或主机名，例如 192.168.1.10</string>
+    <string name="field_port">端口（可选）</string>
+    <string name="field_port_hint">留空则用默认 445</string>
     <string name="field_share">共享名</string>
     <string name="field_share_hint">例如 media</string>
     <string name="field_start_path">起始目录</string>
@@ -44,6 +46,8 @@
     <string name="problem_name_empty">请填写名称</string>
     <string name="problem_host_empty">请填写地址</string>
     <string name="problem_host_invalid">地址不能包含空格或 / ; @ \\</string>
+    <string name="problem_port_in_host">端口请填在下面的「端口」字段里</string>
+    <string name="problem_port_invalid">端口需为 1–65535 之间的数字</string>
     <string name="problem_share_empty">请填写共享名</string>
     <string name="problem_share_invalid">共享名只填第一级，子目录请写在「起始目录」里</string>
     <string name="problem_start_path_invalid">起始目录需以 / 开头</string>

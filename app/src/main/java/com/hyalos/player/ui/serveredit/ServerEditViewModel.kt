@@ -22,6 +22,8 @@ class ServerEditViewModel(
     data class Form(
         val name: String = "",
         val host: String = "",
+        /** Blank means the protocol default. Held as text so "abc" is not read as "no port". */
+        val port: String = "",
         val share: String = "",
         val startPath: String = "/",
         val username: String = "",
@@ -67,6 +69,7 @@ class ServerEditViewModel(
                     form = Form(
                         name = s.name,
                         host = s.host,
+                        port = s.port?.toString().orEmpty(),
                         share = s.share,
                         startPath = s.startPath,
                         username = s.username.orEmpty(),
@@ -82,7 +85,7 @@ class ServerEditViewModel(
     fun update(transform: (Form) -> Form) {
         form = transform(form)
         // Stale results would describe settings that are no longer on screen.
-        if (problem != null) problem = config().validate()
+        if (problem != null) problem = currentProblem()
         if (test !is TestState.Running) test = TestState.Idle
     }
 
@@ -128,9 +131,21 @@ class ServerEditViewModel(
 
     private fun validated(): ServerConfig? {
         val config = config()
-        problem = config.validate()
+        problem = currentProblem()
         return config.takeIf { problem == null }
     }
+
+    /**
+     * The port is text in the form, so "abc" has to be caught here — it would
+     * otherwise parse to `null`, which means "use the default port", and the
+     * mistake would pass silently.
+     */
+    private fun currentProblem(): ServerConfig.Problem? =
+        if (form.port.isNotBlank() && form.port.trim().toIntOrNull() == null) {
+            ServerConfig.Problem.PORT_INVALID
+        } else {
+            config().validate()
+        }
 
     private fun config() = ServerConfig(
         id = serverId ?: newId,
@@ -141,6 +156,7 @@ class ServerEditViewModel(
         username = form.username.trim().ifEmpty { null },
         domain = form.domain.trim().ifEmpty { null },
         smbSeal = form.smbSeal,
+        port = form.port.trim().toIntOrNull(),
     )
 
     /** Stable across test and save, so a new server keeps one id. */

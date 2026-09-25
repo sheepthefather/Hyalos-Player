@@ -131,6 +131,8 @@ uniffi-bindgen generate --library <上面的 .so> --language kotlin
 
 - **URI 原样拼接为 `smb://host/share`，不做百分号编码。** 内核按原始字符串的 `/`、`;`、`@` 切分且不解码（`ParsedEndpoint::parse`），编码会让服务器收到字面的 `%20`。所以校验层禁止 host 含这些字符，share 不得含 `/`。
 - **用户名和域不进 URI**，走 `ConnectRequest` 的独立字段——URI 会出现在日志和错误信息里。
+- **端口写进 URI（`smb://host:1445/share`），因为这是它能到达 libsmb2 的唯一途径。** libsmb2 没有单独设置端口的接口，它自己从服务器字符串里拆 `host:port`（`lib/socket.c` 的 `smb2_connect_async`），缺省 445；内核把 authority 原样透传，所以 URI 里的端口能完整传到。表单上是**独立的「端口」字段**（留空即默认），不是让用户在地址里写 `host:port`——后者与 IPv6 字面量有歧义，而且填错时会得到一个含糊的解析失败。地址里出现单个冒号会被明确拒绝（`PORT_IN_HOST`）并提示填到端口字段。
+- **IPv6 字面量会自动加方括号**。libsmb2 只在地址以 `[` 开头时才按 IPv6 解析，否则把第一个冒号之后的内容当作端口——`fe80::1` 会被切成 host `fe80`、port `::1` 而解析失败。所以裸字面量必须补成 `[fe80::1]`，有端口时是 `[fe80::1]:1445`。
 - **起始目录是应用层概念。** 内核的会话根永远是共享根（URI 里 share 之后的部分被忽略），所以「从 `/movies` 开始浏览」由 App 记录并在浏览时使用。
 
 ### 凭据存储
