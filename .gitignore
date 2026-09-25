@@ -27,3 +27,6 @@ Thumbs.db
 *.jks
 *.keystore
 keystore.properties
+# apksigner writes this beside the APK when it signs; useless without it, and
+# left behind every time a release is signed in the working tree.
+*.idsig
