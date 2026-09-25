@@ -115,8 +115,9 @@ implementation(variantOf(libs.jna) { artifactType("aar") })
 | `data/` | 服务器列表（`ServerRepository`）、加密凭据（`CredentialStore`）、DataStore 的 JSON 序列化器 |
 | `kernel/` | 对 UniFFI 绑定的薄封装：会话管理、路径拼接、关闭辅助 |
 | `playback/` | Media3 数据源（见「播放数据面」） |
+| `files/` | 重命名、删除、复制、剪切/粘贴（`FileOperations`），部分失败如实报告（见「文件操作」） |
 | `thumbnails/` | 视频缩略图：取帧、磁盘缓存与淘汰（见「缩略图」） |
-| `ui/` | Compose 界面，按屏分子包，每屏一个 ViewModel |
+| `ui/` | Compose 界面，按屏分子包，每屏一个 ViewModel（`common/`、`theme/` 除外） |
 
 **依赖注入是手写的，不用 Hilt**：依赖图只有几个对象，而 Hilt 需要 KSP，KSP 与 AGP 9 内置 Kotlin 的配合是又一个可能出错的点——这个构建里已经有一整条 Rust 工具链了。
 
