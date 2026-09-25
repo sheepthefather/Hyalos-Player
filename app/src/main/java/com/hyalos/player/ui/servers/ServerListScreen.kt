@@ -39,7 +39,6 @@ fun ServerListScreen(
     viewModel: ServerListViewModel,
     onOpen: (ServerConfig) -> Unit,
     onAdd: () -> Unit,
-    onOpenPlaylist: (ServerConfig) -> Unit,
     onEdit: (ServerConfig) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
@@ -78,7 +77,6 @@ fun ServerListScreen(
                     ServerRow(
                         server,
                         onOpen = { onOpen(server) },
-                        onOpenPlaylist = { onOpenPlaylist(server) },
                         onEdit = { onEdit(server) },
                         onDelete = { pendingDelete = server },
                     )
@@ -109,7 +107,6 @@ fun ServerListScreen(
 private fun ServerRow(
     server: ServerConfig,
     onOpen: () -> Unit,
-    onOpenPlaylist: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -129,16 +126,6 @@ private fun ServerRow(
                     Icon(painterResource(R.drawable.ic_more_vert), stringResource(R.string.more))
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    // First: it is the one entry here that opens something rather
-                    // than changing the server.
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.playlist_title)) },
-                        leadingIcon = { Icon(painterResource(R.drawable.ic_playlist), null) },
-                        onClick = {
-                            menuOpen = false
-                            onOpenPlaylist()
-                        },
-                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.server_edit)) },
                         leadingIcon = { Icon(painterResource(R.drawable.ic_edit), null) },

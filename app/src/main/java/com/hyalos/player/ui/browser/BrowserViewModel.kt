@@ -1,5 +1,7 @@
 package com.hyalos.player.ui.browser
 
+import android.text.format.DateUtils
+import android.text.format.Formatter
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -16,6 +18,8 @@ import com.hyalos.player.files.RemoteItem
 import com.hyalos.player.kernel.describesThePath
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
+import com.hyalos.player.ui.common.EntryRow
+import com.hyalos.player.ui.common.Selection
 import com.hyalos.player.ui.common.UiError
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
@@ -51,7 +55,15 @@ class BrowserViewModel(
 
     sealed interface State {
         data object Loading : State
-        data class Loaded(val items: List<BrowserItem>) : State
+
+        /**
+         * [rows] is [items] as the list draws them — built here, once, rather
+         * than in the composable, where it would be rebuilt on every
+         * recomposition. The two are produced together in the single place this
+         * state is constructed, so they cannot drift apart.
+         */
+        data class Loaded(val items: List<BrowserItem>, val rows: List<EntryRow>) : State
+
         data class Failed(val error: UiError) : State
     }
 
@@ -114,7 +126,7 @@ class BrowserViewModel(
     val selecting: Boolean get() = selection.active
 
     /** Names of the selected entries, exactly as the listing reports them. */
-    val selected: Set<String> get() = selection.names
+    val selected: Set<String> get() = selection.ids
 
     /** The operation in flight, or `null`. */
     var busy by mutableStateOf<Operation?>(null)
@@ -144,12 +156,16 @@ class BrowserViewModel(
      * items are checked. Rename is offered only while exactly one is selected,
      * which is where the two cases genuinely diverge.
      */
-    fun onLongPress(item: BrowserItem) {
-        selection = selection.select(item.name)
+    fun onLongPress(name: String) {
+        selection = selection.select(name)
     }
 
-    fun onTap(item: BrowserItem, open: () -> Unit) {
-        if (selecting) toggleSelection(item.name) else open()
+    /**
+     * Takes the name rather than the item: one mode covers both requests, and
+     * neither needs more than which entry was touched.
+     */
+    fun onTap(name: String, open: () -> Unit) {
+        if (selecting) toggleSelection(name) else open()
     }
 
     fun toggleSelection(name: String) {
@@ -241,14 +257,15 @@ class BrowserViewModel(
      * A batch action like copy and cut, so it carries no "exactly one selected"
      * condition — that belongs to rename alone.
      *
-     * Folders are dropped: a playlist holds files, and the player can only open a
-     * file. Whatever is dropped is counted and reported rather than passed over
-     * in silence, so the numbers on screen add up to what was selected.
+     * Only what can play goes in. A playlist exists to be played through, and
+     * anything else — a folder, a text file — would be a row that leads straight
+     * to an error. What is left out is counted and reported rather than passed
+     * over in silence, so the numbers on screen add up to what was selected.
      */
     fun addToPlaylist() {
-        val chosen = selectedItems()
+        val chosen = (state as? State.Loaded)?.items.orEmpty().filter { it.name in selected }
         if (chosen.isEmpty()) return
-        val paths = chosen.filterNot { it.isDirectory }.map { it.path }
+        val paths = chosen.filter { it.playable }.map { RemotePath.join(path, it.name) }
         viewModelScope.launch {
             val added = if (paths.isEmpty()) 0 else container.playlists.add(serverId, paths)
             playlistNotice = PlaylistNotice(added = added, skipped = chosen.size - added)
@@ -348,7 +365,7 @@ class BrowserViewModel(
                     // alone they would have the toolbar counting items that are
                     // not on screen and cannot be acted on.
                     selection = selection.prune(sorted.mapTo(mutableSetOf()) { it.name })
-                    state = State.Loaded(sorted)
+                    state = State.Loaded(sorted, sorted.map { it.toRow() })
                 }
             }
         }
@@ -377,23 +394,47 @@ class BrowserViewModel(
     }
 
     /**
-     * The thumbnail for [item], or `null` if there is none to show.
+     * The frame behind a thumbnail key, or `null` when there is none to show.
      *
-     * Called from the item's composition, so it runs only while that item is on
-     * screen and is cancelled when it scrolls away. The key carries the size and
-     * modification time, so a file that is replaced gets a fresh frame rather
-     * than the old film's.
+     * Called from the row's composition, so it runs only while that row is on
+     * screen and is cancelled when it scrolls away.
      */
-    suspend fun thumbnailFor(item: BrowserItem): android.graphics.Bitmap? {
-        if (item.kind != BrowserItem.Kind.VIDEO) return null
-        return container.thumbnails.load(
-            ThumbnailKey(
-                serverId = serverId,
-                path = RemotePath.join(path, item.name),
-                size = item.size,
-                modifiedMs = item.modifiedMs,
-            ),
-        )
+    suspend fun loadThumbnail(key: ThumbnailKey): android.graphics.Bitmap? =
+        container.thumbnails.load(key)
+
+    /**
+     * One listing entry as the list draws it.
+     *
+     * The key carries the size and the modification time, so a file that is
+     * replaced on the server gets a fresh frame rather than the old film's. A
+     * playlist knows only paths and cannot do that, so it builds a different key
+     * and shares none of this cache — see `ARCHITECTURE.md`.
+     */
+    private fun BrowserItem.toRow(): EntryRow = EntryRow(
+        id = name,
+        name = name,
+        detail = details(),
+        icon = EntrySorting.iconFor(kind),
+        thumbnail = ThumbnailKey(
+            serverId = serverId,
+            path = RemotePath.join(path, name),
+            size = size,
+            modifiedMs = modifiedMs,
+        ).takeIf { kind == BrowserItem.Kind.VIDEO },
+    )
+
+    /** "1.4 GB · 2024/3/5", or whichever half is known. */
+    private fun BrowserItem.details(): String? {
+        val context = container.appContext
+        val size = size?.let { Formatter.formatShortFileSize(context, it) }
+        val date = modifiedMs?.let {
+            DateUtils.formatDateTime(
+                context,
+                it,
+                DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_YEAR or DateUtils.FORMAT_NUMERIC_DATE,
+            )
+        }
+        return listOfNotNull(size, date).joinToString(" · ").ifEmpty { null }
     }
 
     private fun load(refresh: Boolean = false) {

@@ -54,6 +54,15 @@ sealed interface Route : NavKey {
         val fromPlaylist: Boolean = false,
     ) : Route
 
+    /**
+     * The playlist tab's root: which server's playlist to open.
+     *
+     * A root of its own rather than [Servers], so each tab keeps a back stack of
+     * its own and switching between them does not unwind either.
+     */
+    @Serializable
+    data object Playlists : Route
+
     /** One server's playlist. The list belongs to a server, so the id is the key. */
     @Serializable
     data class Playlist(val serverId: String) : Route

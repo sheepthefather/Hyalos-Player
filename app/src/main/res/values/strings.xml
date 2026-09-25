@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">Hyalos</string>
 
+    <!-- 底部栏。与各屏标题分开，因为两者的长度要求不同。 -->
+    <string name="tab_servers">服务器</string>
+    <string name="tab_playlists">播放列表</string>
+
     <!-- 通用 -->
     <string name="back">返回</string>
     <string name="cancel">取消</string>
@@ -112,6 +116,7 @@
     <string name="action_paste">粘贴</string>
     <string name="selection_count">已选 %1$d 项</string>
     <string name="selection_close">退出选择</string>
+    <string name="selection_all">全选</string>
     <string name="rename_title">重命名</string>
     <string name="rename_field">新名称</string>
     <string name="delete_title">确认删除</string>
@@ -131,13 +136,14 @@
     <!-- 播放列表（每台服务器一个） -->
     <string name="playlist_title">播放列表</string>
     <string name="action_add_to_playlist">加入播放列表</string>
-    <string name="playlist_play_all">播放全部</string>
     <string name="playlist_empty">播放列表是空的</string>
     <string name="playlist_empty_hint">浏览目录时长按选中视频，再点「加入播放列表」</string>
     <string name="playlist_remove">移出播放列表</string>
-    <string name="playlist_clear">清空</string>
-    <string name="playlist_clear_title">清空播放列表？</string>
-    <string name="playlist_clear_body">将从「%1$s」的播放列表中移除 %2$d 项。此操作不可撤销。</string>
+    <string name="playlist_remove_title">从播放列表移除？</string>
+    <string name="playlist_remove_body">将从「%1$s」的播放列表中移除 %2$d 项。影片本身不会被删除，仍在服务器上。</string>
+    <string name="playlist_has_entries">已加入视频</string>
+    <string name="playlist_no_entries">还没有加入视频</string>
+    <string name="playlist_no_servers_hint">先到「服务器」里添加一台 NAS</string>
     <string name="playlist_added">已加入播放列表</string>
     <string name="playlist_added_some">已加入 %1$d 项，%2$d 项未加入</string>
     <string name="playlist_added_none">没有可加入的项</string>

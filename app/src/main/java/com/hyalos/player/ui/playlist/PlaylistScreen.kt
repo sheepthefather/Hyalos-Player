@@ -1,19 +1,14 @@
 package com.hyalos.player.ui.playlist
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -21,9 +16,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -31,15 +23,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
-import com.hyalos.player.kernel.RemotePath
+import com.hyalos.player.data.BrowserLayout
 import com.hyalos.player.ui.common.CenteredMessage
+import com.hyalos.player.ui.common.EntryGrid
+import com.hyalos.player.ui.common.EntryList
 
 /**
- * The queue a user built by hand, one server's worth.
+ * One server's playlist, drawn exactly like a directory.
  *
- * Unlike the folder a film happens to sit in, the entries here come from
- * anywhere on the share — which is why each row says where it is. Two folders
- * holding "Episode 1.mkv" would otherwise be indistinguishable.
+ * Deliberately the same list, the same tiles and the same selection mode as the
+ * browser: the entries are films either way, and a second way of showing them
+ * would be a second set of habits to learn. What differs is what the entries
+ * *are* — this screen cannot open a folder, rename, copy or paste, and its only
+ * action takes an entry out of the list without touching the file.
+ *
+ * There is no sort menu. The order is the order they were added, which is also
+ * the order they play in; re-ordering the view would make the screen disagree
+ * with what comes next.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,105 +48,143 @@ fun PlaylistScreen(
     onPlay: (String) -> Unit,
     onBack: () -> Unit,
 ) {
-    val entries by viewModel.entries.collectAsStateWithLifecycle()
+    val state = viewModel.state
+    val layout by viewModel.layout.collectAsStateWithLifecycle()
     val serverName by viewModel.serverName.collectAsStateWithLifecycle()
-    var confirmingClear by remember { mutableStateOf(false) }
+    val grid = layout == BrowserLayout.GRID
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.playlist_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
-                    }
-                },
-                actions = {
-                    // Nothing to clear when there is nothing there.
-                    if (!entries.isNullOrEmpty()) {
-                        TextButton(onClick = { confirmingClear = true }) {
-                            Text(stringResource(R.string.playlist_clear))
-                        }
-                    }
-                },
-            )
+            if (viewModel.selecting) {
+                SelectionBar(viewModel)
+            } else {
+                Column {
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.playlist_title)) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = viewModel::toggleLayout) {
+                                if (grid) {
+                                    Icon(
+                                        painterResource(R.drawable.ic_view_list),
+                                        stringResource(R.string.browser_switch_to_list),
+                                    )
+                                } else {
+                                    Icon(
+                                        painterResource(R.drawable.ic_grid_view),
+                                        stringResource(R.string.browser_switch_to_grid),
+                                    )
+                                }
+                            }
+                        },
+                    )
+                    // Stands where the browser's breadcrumb does: the list belongs
+                    // to one server, and "播放列表" alone would not say which.
+                    Text(
+                        serverName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    )
+                }
+            }
         },
     ) { insets ->
-        val list = entries
-        when {
-            list == null -> Box(Modifier.fillMaxSize().padding(insets), Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            list.isEmpty() -> CenteredMessage(
-                stringResource(R.string.playlist_empty),
-                Modifier.padding(insets),
-                secondary = stringResource(R.string.playlist_empty_hint),
-            )
-            else -> Column(Modifier.fillMaxSize().padding(insets)) {
-                Text(
-                    serverName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                )
-                Button(
-                    onClick = { onPlay(list.first()) },
-                    modifier = Modifier.padding(16.dp),
-                ) {
-                    Text(stringResource(R.string.playlist_play_all))
+        val modifier = Modifier.fillMaxSize().padding(insets)
+        when (val current = state) {
+            PlaylistViewModel.State.Loading ->
+                Box(modifier, Alignment.Center) { CircularProgressIndicator() }
+
+            is PlaylistViewModel.State.Loaded ->
+                if (current.rows.isEmpty()) {
+                    CenteredMessage(
+                        stringResource(R.string.playlist_empty),
+                        modifier,
+                        secondary = stringResource(R.string.playlist_empty_hint),
+                    )
+                } else if (grid) {
+                    EntryGrid(
+                        items = current.rows,
+                        loadThumbnail = viewModel::loadThumbnail,
+                        selected = viewModel.selected,
+                        // Every entry here can play: only playable files are let in.
+                        onClick = { viewModel.onTap(it.id) { onPlay(it.id) } },
+                        onLongClick = { viewModel.onLongPress(it.id) },
+                        // The Scaffold's own padding still has to be applied by
+                        // hand — the list draws from the very top otherwise, and
+                        // the first row ends up behind the app bar.
+                        modifier = modifier,
+                    )
+                } else {
+                    EntryList(
+                        items = current.rows,
+                        loadThumbnail = viewModel::loadThumbnail,
+                        selected = viewModel.selected,
+                        onClick = { viewModel.onTap(it.id) { onPlay(it.id) } },
+                        onLongClick = { viewModel.onLongPress(it.id) },
+                        modifier = modifier,
+                    )
                 }
-                LazyColumn(Modifier.fillMaxSize()) {
-                    // The path is the key and the identity: entries are unique,
-                    // and this screen deletes by the same string.
-                    items(list, key = { it }) { path ->
-                        PlaylistRow(
-                            path = path,
-                            onPlay = { onPlay(path) },
-                            onRemove = { viewModel.remove(path) },
-                        )
-                    }
-                }
-            }
         }
     }
 
-    val count = entries?.size ?: 0
-    if (confirmingClear && count > 0) {
-        AlertDialog(
-            onDismissRequest = { confirmingClear = false },
-            title = { Text(stringResource(R.string.playlist_clear_title)) },
-            text = { Text(stringResource(R.string.playlist_clear_body, serverName, count)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.clear()
-                        confirmingClear = false
-                    },
-                ) { Text(stringResource(R.string.playlist_clear)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmingClear = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
-            },
-        )
-    }
+    RemoveDialog(viewModel, serverName)
 }
 
+/**
+ * The toolbar while entries are selected.
+ *
+ * Replaces the normal one, as in the browser. Delete is the only action: there
+ * is nothing here to rename, copy or paste — and select-all is the way to empty
+ * a long list without fifty taps.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlaylistRow(path: String, onPlay: () -> Unit, onRemove: () -> Unit) {
-    ListItem(
-        modifier = Modifier.clickable(onClick = onPlay),
-        headlineContent = { Text(RemotePath.name(path)) },
-        // Where it lives, not what it is: the whole point of this list is that its
-        // entries come from different folders.
-        supportingContent = { Text(RemotePath.parent(path) ?: RemotePath.ROOT) },
-        trailingContent = {
-            // A cross, not a bin: this takes the entry out of the list, and says
-            // nothing about the file, which is still on the server.
-            IconButton(onClick = onRemove) {
-                Icon(painterResource(R.drawable.ic_close), stringResource(R.string.playlist_remove))
+private fun SelectionBar(viewModel: PlaylistViewModel) {
+    TopAppBar(
+        title = { Text(stringResource(R.string.selection_count, viewModel.selected.size)) },
+        navigationIcon = {
+            IconButton(onClick = viewModel::clearSelection) {
+                Icon(painterResource(R.drawable.ic_close), stringResource(R.string.selection_close))
+            }
+        },
+        actions = {
+            IconButton(onClick = viewModel::selectAll) {
+                Icon(painterResource(R.drawable.ic_select_all), stringResource(R.string.selection_all))
+            }
+            IconButton(onClick = viewModel::askRemove) {
+                Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.playlist_remove))
+            }
+        },
+    )
+}
+
+/**
+ * Confirms taking entries out of the list.
+ *
+ * Counted, like the browser's delete, so "remove Series 3" reads as "remove 47".
+ * It also has to say what is *not* happening: the bin icon invites the reading
+ * that these files are being deleted, and they are not.
+ */
+@Composable
+private fun RemoveDialog(viewModel: PlaylistViewModel, serverName: String) {
+    if (!viewModel.confirmingRemove) return
+    AlertDialog(
+        onDismissRequest = viewModel::cancelRemove,
+        title = { Text(stringResource(R.string.playlist_remove_title)) },
+        text = { Text(stringResource(R.string.playlist_remove_body, serverName, viewModel.selected.size)) },
+        confirmButton = {
+            TextButton(onClick = viewModel::confirmRemove) {
+                Text(stringResource(R.string.playlist_remove))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = viewModel::cancelRemove) {
+                Text(stringResource(R.string.cancel))
             }
         },
     )

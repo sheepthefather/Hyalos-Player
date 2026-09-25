@@ -3,6 +3,8 @@ package com.hyalos.player.ui.browser
 import android.icu.text.Collator
 import android.icu.text.RuleBasedCollator
 import android.icu.util.ULocale
+import androidx.annotation.DrawableRes
+import com.hyalos.player.R
 import com.hyalos.player.data.SortKey
 import uniffi.krystallos_ffi.DirEntry
 import uniffi.krystallos_ffi.Kind
@@ -128,6 +130,21 @@ object EntrySorting {
         in VIDEO_EXTENSIONS -> BrowserItem.Kind.VIDEO
         in AUDIO_EXTENSIONS -> BrowserItem.Kind.AUDIO
         else -> BrowserItem.Kind.OTHER
+    }
+
+    /**
+     * The drawable standing in for an entry with no frame to show.
+     *
+     * Both lists need this — a directory and a playlist draw the same four
+     * kinds — so the mapping lives beside the kinds themselves rather than in
+     * whichever screen happens to need it first.
+     */
+    @DrawableRes
+    fun iconFor(kind: BrowserItem.Kind): Int = when (kind) {
+        BrowserItem.Kind.DIRECTORY -> R.drawable.ic_folder
+        BrowserItem.Kind.VIDEO -> R.drawable.ic_movie
+        BrowserItem.Kind.AUDIO -> R.drawable.ic_music_note
+        BrowserItem.Kind.OTHER -> R.drawable.ic_draft
     }
 
     /**

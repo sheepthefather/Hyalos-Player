@@ -31,6 +31,12 @@ class PlaylistRepository(private val store: DataStore<Playlists>) {
         store.data.map { it.byServer[serverId].orEmpty() }
 
     /**
+     * Every playlist at once, for the one screen that picks a server rather than
+     * showing entries — it has to know which of them have anything in them.
+     */
+    val all: Flow<Map<String, List<String>>> = store.data.map { it.byServer }
+
+    /**
      * Append [paths] to [serverId]'s playlist, skipping the ones already in it,
      * and report how many were new.
      *
@@ -51,10 +57,13 @@ class PlaylistRepository(private val store: DataStore<Playlists>) {
         return added
     }
 
-    suspend fun remove(serverId: String, path: String) {
+    /** Remove [paths] in one update — one write for a whole selection, not one each. */
+    suspend fun removeAll(serverId: String, paths: List<String>) {
+        if (paths.isEmpty()) return
+        val doomed = paths.toSet()
         store.updateData { all ->
             val existing = all.byServer[serverId] ?: return@updateData all
-            all.copy(byServer = all.byServer + (serverId to existing.filterNot { it == path }))
+            all.copy(byServer = all.byServer + (serverId to existing.filterNot { it in doomed }))
         }
     }
 

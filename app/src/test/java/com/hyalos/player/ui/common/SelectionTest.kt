@@ -1,4 +1,4 @@
-package com.hyalos.player.ui.browser
+package com.hyalos.player.ui.common
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,21 +10,21 @@ class SelectionTest {
     fun `selecting turns the mode on`() {
         val selection = Selection.NONE.select("a.mkv")
         assertTrue(selection.active)
-        assertEquals(setOf("a.mkv"), selection.names)
+        assertEquals(setOf("a.mkv"), selection.ids)
     }
 
     @Test
-    fun `toggling the last name off leaves the mode`() {
+    fun `toggling the last one off leaves the mode`() {
         val selection = Selection.NONE.select("a.mkv").toggle("a.mkv")
         assertFalse("nothing is selected, so the toolbar should be gone", selection.active)
-        assertTrue(selection.names.isEmpty())
+        assertTrue(selection.ids.isEmpty())
     }
 
     @Test
     fun `toggling one of several keeps the mode`() {
         val selection = Selection.NONE.select("a").select("b").toggle("a")
         assertTrue(selection.active)
-        assertEquals(setOf("b"), selection.names)
+        assertEquals(setOf("b"), selection.ids)
     }
 
     @Test
@@ -37,21 +37,21 @@ class SelectionTest {
         val pruned = selection.prune(setOf("renamed.txt", "movies"))
 
         assertFalse("an empty selection must not keep the mode on", pruned.active)
-        assertTrue(pruned.names.isEmpty())
+        assertTrue(pruned.ids.isEmpty())
     }
 
     @Test
-    fun `pruning keeps the names that are still there`() {
+    fun `pruning keeps the ones that are still there`() {
         val selection = Selection.NONE.select("a").select("b").select("c")
 
         val pruned = selection.prune(setOf("a", "c", "d"))
 
-        assertEquals(setOf("a", "c"), pruned.names)
+        assertEquals(setOf("a", "c"), pruned.ids)
         assertTrue(pruned.active)
     }
 
     @Test
-    fun `pruning an unchanged listing changes nothing`() {
+    fun `pruning an unchanged list changes nothing`() {
         val selection = Selection.NONE.select("a").select("b")
         assertEquals(selection, selection.prune(setOf("a", "b", "c")))
     }
@@ -59,5 +59,20 @@ class SelectionTest {
     @Test
     fun `an empty selection stays empty through a prune`() {
         assertEquals(Selection.NONE, Selection.NONE.prune(setOf("a")))
+    }
+
+    @Test
+    fun `select-all takes everything it is given`() {
+        val selection = Selection.all(listOf("/a", "/b"))
+
+        assertTrue(selection.active)
+        assertEquals(setOf("/a", "/b"), selection.ids)
+    }
+
+    @Test
+    fun `select-all with nothing to select stays out of the mode`() {
+        // Otherwise the toolbar would appear over an empty list with a delete
+        // button that has nothing to delete.
+        assertFalse(Selection.all(emptyList()).active)
     }
 }
