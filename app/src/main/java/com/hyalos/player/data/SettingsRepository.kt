@@ -28,6 +28,14 @@ class SettingsRepository(private val store: DataStore<AppSettings>) {
         store.updateData { it.copy(sortAscending = ascending) }
     }
 
+    suspend fun setAutoPlayNext(enabled: Boolean) {
+        store.updateData { it.copy(autoPlayNext = enabled) }
+    }
+
+    suspend fun setVideoScale(scale: VideoScale) {
+        store.updateData { it.copy(videoScale = scale) }
+    }
+
     companion object {
         fun create(context: Context): SettingsRepository = SettingsRepository(
             DataStoreFactory.create(

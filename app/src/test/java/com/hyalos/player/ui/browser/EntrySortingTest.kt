@@ -148,6 +148,50 @@ class EntrySortingTest {
     }
 
     @Test
+    fun `a playlist holds only playable files`() {
+        // Directories, text and images are things the browser shows and the
+        // player must not try to open.
+        val items = EntrySorting.playableInOrder(
+            listOf(
+                entry("b.mkv"),
+                entry("notes.txt"),
+                entry("folder", Kind.DIRECTORY),
+                entry("a.mp4"),
+                entry("cover.jpg"),
+            ),
+            nameOrder = naturalOrder(),
+        )
+        assertEquals(listOf("a.mp4", "b.mkv"), items.map { it.name })
+    }
+
+    @Test
+    fun `a playlist follows the order the browser shows`() {
+        // "Next" has to be the next one the user saw. A playlist that sorted
+        // differently from the listing would play films out of order.
+        val entries = listOf(entry("small.mkv", len = 10), entry("large.mkv", len = 9_000))
+
+        assertEquals(
+            listOf("small.mkv", "large.mkv"),
+            EntrySorting.playableInOrder(entries, SortKey.SIZE, true, naturalOrder()).map { it.name },
+        )
+        assertEquals(
+            listOf("large.mkv", "small.mkv"),
+            EntrySorting.playableInOrder(entries, SortKey.SIZE, false, naturalOrder()).map { it.name },
+        )
+    }
+
+    @Test
+    fun `audio is part of the playlist`() {
+        // The player handles both, and the browser marks both playable, so the
+        // playlist must agree with the browser rather than with "video only".
+        val items = EntrySorting.playableInOrder(
+            listOf(entry("song.flac"), entry("a.mkv")),
+            nameOrder = naturalOrder(),
+        )
+        assertEquals(listOf("a.mkv", "song.flac"), items.map { it.name })
+    }
+
+    @Test
     fun `a symlink is judged by its name, a device is never playable`() {
         val items = prepare(entry("link.mkv", Kind.SYMLINK), entry("pipe.mkv", Kind.OTHER))
         assertTrue(items.single { it.name == "link.mkv" }.playable)

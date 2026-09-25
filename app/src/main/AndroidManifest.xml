@@ -19,10 +19,29 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.HyalosPlayer">
 
+        <!--
+          `configChanges` so that rotating the screen does not rebuild the
+          activity. Two reasons, and the first one was a real bug:
+
+          1. The player screen turns itself to landscape for widescreen video.
+             Without this, that rotation counted as a configuration change, the
+             activity was recreated, and the outgoing screen's `ON_STOP` paused
+             the player — which lives in the ViewModel and survives recreation.
+             The result was a video that opened, showed its first frame, and
+             then sat still: playing for 24 milliseconds.
+          2. Rebuilding tears down and reattaches the video surface, which shows
+             as a black flash on every rotation.
+
+          Compose handles these changes by recomposing — `LocalConfiguration` is
+          updated and anything reading it redraws. Deliberately not listed:
+          `locale`, `density` and `fontScale`, where recomposition alone would
+          not be enough and a rebuild is the safer answer.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

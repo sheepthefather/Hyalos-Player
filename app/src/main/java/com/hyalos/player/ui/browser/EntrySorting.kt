@@ -31,6 +31,31 @@ data class BrowserItem(
 object EntrySorting {
 
     /**
+     * The system's name order, built once.
+     *
+     * Building a collator is not free, and the browser and the player need the
+     * same one — a playlist that ordered names differently from the listing
+     * would play films out of the order they appeared in.
+     */
+    val systemOrder: Comparator<String> by lazy { systemNameOrder() }
+
+    /**
+     * The entries a player would step through, in the order the browser showed
+     * them.
+     *
+     * "Next" has to mean the next one the *user saw*, so this is the same
+     * sorting and the same playability rule the listing uses rather than a
+     * second opinion about either — a playlist that disagreed with the screen
+     * would skip films or play them out of order.
+     */
+    fun playableInOrder(
+        entries: List<DirEntry>,
+        key: SortKey = SortKey.NAME,
+        ascending: Boolean = true,
+        nameOrder: Comparator<String>,
+    ): List<BrowserItem> = prepare(entries, key, ascending, nameOrder).filter { it.playable }
+
+    /**
      * Filter, classify and order a raw listing.
      *
      * **Directories stay on top in every order.** Sorting strictly by size would

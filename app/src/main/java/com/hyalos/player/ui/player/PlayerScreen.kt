@@ -31,12 +31,15 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.hyalos.player.R
+import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
 
 /**
@@ -51,13 +54,26 @@ import com.hyalos.player.playback.PlaybackErrors
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val player = viewModel.player
+    val videoScale by viewModel.videoScale.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(player.playerError != null) }
 
     Immersive()
     LandscapeForWideVideo(player)
+
     // No background playback yet, so leaving the app pauses.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { player.pause() }
+    //
+    // Except when the activity is being rebuilt for a configuration change. The
+    // player lives in the ViewModel, which survives that rebuild, so pausing on
+    // the way out would pause the *new* screen's player — and since this screen
+    // rotates itself for widescreen video, that used to stop playback 24 ms
+    // after it started. The manifest now claims orientation changes so this
+    // cannot happen for rotation, but other changes (locale, split screen) can
+    // still rebuild the activity and would fail the same way.
+    val activity = LocalActivity.current
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        if (activity?.isChangingConfigurations != true) player.pause()
+    }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -84,6 +100,9 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     )
                 }
             },
+            // Applied here rather than in the factory: the factory runs once, so
+            // a later change to the setting would never reach the view.
+            update = { view -> view.resizeMode = videoScale.toResizeMode() },
             // Detach so the view does not hold the player past this screen.
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize(),
@@ -112,6 +131,19 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
 }
 
 /** Hide the system bars while this screen is shown; a swipe brings them back briefly. */
+/**
+ * The player's fitting mode for a chosen scale.
+ *
+ * `RESIZE_MODE_FILL` is the one that distorts, and `RESIZE_MODE_ZOOM` the one
+ * that crops; both are deliberate choices in settings rather than something to
+ * meet by accident.
+ */
+private fun VideoScale.toResizeMode(): Int = when (this) {
+    VideoScale.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+    VideoScale.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+    VideoScale.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+}
+
 @Composable
 private fun Immersive() {
     val activity = LocalActivity.current ?: return

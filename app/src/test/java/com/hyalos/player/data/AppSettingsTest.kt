@@ -32,6 +32,21 @@ class AppSettingsTest {
     }
 
     @Test
+    fun `playback defaults are the ones that read as working`() {
+        val defaults = AppSettings()
+        // Stopping after each episode would read as broken, and distorting or
+        // cropping the picture is something a user should choose, not meet.
+        assertEquals(true, defaults.autoPlayNext)
+        assertEquals(VideoScale.FIT, defaults.videoScale)
+    }
+
+    @Test
+    fun `the video scale is stored by name too`() {
+        val encoded = json.encodeToString(AppSettings.serializer(), AppSettings(videoScale = VideoScale.ZOOM))
+        assertEquals(true, encoded.contains("\"ZOOM\""))
+    }
+
+    @Test
     fun `a settings file from an older version still loads`() {
         // The file that exists on disk today has no `browserLayout` key at all.
         val decoded = json.decodeFromString(AppSettings.serializer(), """{"thumbnailCacheMb":250}""")

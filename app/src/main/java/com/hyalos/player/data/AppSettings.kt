@@ -32,6 +32,18 @@ data class AppSettings(
     /** What the browser orders a directory by, and which direction. */
     val sortKey: SortKey = SortKey.NAME,
     val sortAscending: Boolean = true,
+
+    /**
+     * Whether finishing one film starts the next one in the folder.
+     *
+     * On by default: watching a series folder episode by episode is the case
+     * this exists for, and a player that stopped after each one would read as
+     * broken rather than as a default.
+     */
+    val autoPlayNext: Boolean = true,
+
+    /** How video is fitted to the screen. */
+    val videoScale: VideoScale = VideoScale.FIT,
 ) {
     companion object {
         const val DEFAULT_THUMBNAIL_CACHE_MB = 100
@@ -48,3 +60,22 @@ enum class BrowserLayout { LIST, GRID }
 /** What the file browser orders entries by. */
 @Serializable
 enum class SortKey { NAME, DATE, SIZE, TYPE }
+
+/**
+ * How video is fitted to the screen.
+ *
+ * [FIT] is the default because it is the only one that neither distorts the
+ * picture nor hides part of it — the other two are choices a user makes
+ * deliberately, not something to be surprised by on opening a film.
+ */
+@Serializable
+enum class VideoScale {
+    /** Whole frame visible, bars where the aspect ratios differ. */
+    FIT,
+
+    /** Stretched to fill, ignoring the aspect ratio. */
+    FILL,
+
+    /** Fills the screen keeping the aspect ratio, cropping the overflow. */
+    ZOOM,
+}

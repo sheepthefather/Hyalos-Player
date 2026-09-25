@@ -375,7 +375,7 @@ class BrowserViewModel(
     }
 
     private companion object {
-        /** Building a collator is not free; one serves every directory. */
-        val nameOrder by lazy { EntrySorting.systemNameOrder() }
+        /** Shared with the player, so a playlist orders names the same way. */
+        val nameOrder = EntrySorting.systemOrder
     }
 }

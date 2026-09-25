@@ -85,6 +85,16 @@
     <string name="sort_ascending">升序</string>
     <string name="sort_descending">降序</string>
 
+    <!-- 播放设置 -->
+    <string name="settings_playback">播放</string>
+    <string name="settings_auto_next">自动播放下一个</string>
+    <string name="settings_auto_next_hint">当前影片播完后，继续播放同一文件夹里的下一个</string>
+    <string name="settings_video_scale">画面比例</string>
+    <string name="settings_video_scale_hint">适应：完整显示，比例不符处留黑边。拉伸：铺满屏幕但画面会变形。裁切：铺满且不变形，但会切掉超出屏幕的部分。</string>
+    <string name="scale_fit">适应</string>
+    <string name="scale_fill">拉伸</string>
+    <string name="scale_zoom">裁切</string>
+
     <!-- 文件操作 -->
     <string name="action_rename">重命名</string>
     <string name="action_delete">删除</string>

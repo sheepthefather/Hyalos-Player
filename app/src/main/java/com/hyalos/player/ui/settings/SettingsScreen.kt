@@ -10,6 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Switch
+import com.hyalos.player.data.VideoScale
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +60,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            PlaybackSection(viewModel)
+
+            HorizontalDivider()
+
             Text(stringResource(R.string.settings_thumbnails), style = MaterialTheme.typography.titleMedium)
             Text(
                 stringResource(R.string.settings_cache_hint),
@@ -67,6 +75,58 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
         }
     }
 }
+
+/**
+ * How playback behaves — the two choices that do not belong to any one file.
+ *
+ * Unlike the cache limit below, neither of these costs anything to change, so
+ * they are written as soon as they are touched.
+ */
+@Composable
+private fun PlaybackSection(viewModel: SettingsViewModel) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.settings_playback), style = MaterialTheme.typography.titleMedium)
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_auto_next), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.settings_auto_next_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = viewModel.autoPlayNext,
+                onCheckedChange = viewModel::onAutoPlayNextChange,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+
+        Text(stringResource(R.string.settings_video_scale), style = MaterialTheme.typography.bodyLarge)
+        Text(
+            stringResource(R.string.settings_video_scale_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SCALES.forEach { (scale, label) ->
+                FilterChip(
+                    selected = viewModel.videoScale == scale,
+                    onClick = { viewModel.onVideoScaleChange(scale) },
+                    label = { Text(stringResource(label)) },
+                )
+            }
+        }
+    }
+}
+
+/** In the order they are shown; `FIT` first because it is the default. */
+private val SCALES = listOf(
+    VideoScale.FIT to R.string.scale_fit,
+    VideoScale.FILL to R.string.scale_fill,
+    VideoScale.ZOOM to R.string.scale_zoom,
+)
 
 @Composable
 private fun CacheLimit(viewModel: SettingsViewModel) {

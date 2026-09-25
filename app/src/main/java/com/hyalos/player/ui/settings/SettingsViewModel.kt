@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.AppSettings
+import com.hyalos.player.data.VideoScale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -44,11 +45,32 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     val sliderMax = AppSettings.SLIDER_MAX_MB.toFloat()
 
+    /** Whether finishing a film starts the next one in its folder. */
+    var autoPlayNext by mutableStateOf(AppSettings().autoPlayNext)
+        private set
+
+    /** How video is fitted to the screen. */
+    var videoScale by mutableStateOf(AppSettings().videoScale)
+        private set
+
     init {
         viewModelScope.launch {
-            show(container.settings.settings.first().thumbnailCacheMb)
+            val settings = container.settings.settings.first()
+            show(settings.thumbnailCacheMb)
+            autoPlayNext = settings.autoPlayNext
+            videoScale = settings.videoScale
             refreshUsage()
         }
+    }
+
+    fun onAutoPlayNextChange(enabled: Boolean) {
+        autoPlayNext = enabled
+        viewModelScope.launch { container.settings.setAutoPlayNext(enabled) }
+    }
+
+    fun onVideoScaleChange(scale: VideoScale) {
+        videoScale = scale
+        viewModelScope.launch { container.settings.setVideoScale(scale) }
     }
 
     fun onSliderMove(value: Float) {
