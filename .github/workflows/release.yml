@@ -50,6 +50,24 @@ jobs:
         if: steps.cargo-ndk.outputs.cache-hit != 'true'
         run: cargo install cargo-ndk --version 4.1.2 --locked
 
+      # Cross-compiling the kernel is about twelve of this job's sixteen minutes,
+      # and its inputs only move when the submodule pointer does.
+      #
+      # Keyed on the lockfile rather than on the sources, deliberately: a source
+      # change is then a cache *hit* that cargo rebuilds incrementally, which is
+      # what keeps the key stable enough to be worth restoring at all.
+      #
+      # It is a large entry — around 3 GB, against GitHub's 10 GB per-repo
+      # budget. Deleting this step costs twelve minutes a run and nothing else.
+      - name: Cache the kernel's Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            vendor/krystallos/target
+            ~/.cargo/registry
+          key: rust-${{ runner.os }}-${{ hashFiles('vendor/krystallos/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-
+
       # The runner image ships an Android SDK, but not necessarily this
       # project's: it compiles against API 37 and builds the kernel with NDK 30.
       #
