@@ -75,6 +75,19 @@ jobs:
       - name: Unit tests
         run: ./gradlew test
 
+      # Kept when a test fails. Gradle's console output names the test that broke
+      # but not what it expected — which is exactly the gap that made the first
+      # flake here take a re-run to diagnose.
+      - name: Upload the test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: |
+            app/build/reports/tests/
+            app/build/test-results/
+          retention-days: 7
+
       - name: Assemble release
         run: ./gradlew assembleRelease
 

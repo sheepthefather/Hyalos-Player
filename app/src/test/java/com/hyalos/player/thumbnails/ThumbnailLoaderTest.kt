@@ -1,5 +1,6 @@
 package com.hyalos.player.thumbnails
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -79,24 +80,48 @@ class ThumbnailLoaderTest {
         assertEquals("the same film was extracted concurrently", 1, peak.get())
     }
 
+    /**
+     * Held, not timed.
+     *
+     * The first film is parked inside its extraction, and the second has to get
+     * through on its own while it sits there. An earlier version counted how
+     * many extractions were ever in flight at once and asserted a peak of two —
+     * which is a race, not a proof: `ThumbnailCache` reads the disk on
+     * `Dispatchers.IO`, and `runTest` advances its *virtual* clock the moment the
+     * test scheduler runs dry, so on a slow machine the first film's `delay`
+     * could elapse before the second had finished its file check and the peak
+     * came out as one. It passed here and failed on CI.
+     *
+     * Nothing below can pass by accident: if an extraction held anything global,
+     * the second film would never return, the test would never complete, and
+     * `runTest` would fail it on its timeout.
+     */
     @Test
     fun `different films are not serialised behind each other`() = runTest {
         val other = ThumbnailKey("srv", "/movies/b.mkv", 1024, 0)
-        val active = AtomicInteger()
-        val peak = AtomicInteger()
-        val loader = loader(cache()) {
-            val now = active.incrementAndGet()
-            peak.updateAndGet { maxOf(it, now) }
-            delay(10)
-            active.decrementAndGet()
+        val extracted = AtomicInteger()
+        val firstIsExtracting = CompletableDeferred<Unit>()
+        val holdTheFirst = CompletableDeferred<Unit>()
+        val loader = loader(cache()) { requested ->
+            extracted.incrementAndGet()
+            if (requested == key) {
+                firstIsExtracting.complete(Unit)
+                holdTheFirst.await()
+            }
             Extraction.Transient
         }
 
-        coroutineScope {
-            listOf(async { loader.load(key) }, async { loader.load(other) }).forEach { it.await() }
-        }
+        val first = async { loader.load(key) }
+        firstIsExtracting.await()
 
-        assertEquals("two different films were serialised", 2, peak.get())
+        // The second film, from outside any coroutine the first could be queued
+        // behind: it must run its own extraction to completion right here.
+        loader.load(other)
+
+        holdTheFirst.complete(Unit)
+        first.await()
+
+        assertEquals("the second film was never extracted", 2, extracted.get())
     }
 
     @Test
