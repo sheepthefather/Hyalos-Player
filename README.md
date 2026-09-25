@@ -59,6 +59,26 @@ Gradle 构建的是 submodule 的**工作树**，不是某个提交快照，所�
 
 `app/build.gradle.kts` 与 `libs.versions.toml` 里有五处**不能按直觉改**的地方（Kotlin 插件、JNA 变体、`cargo ndk -P 29`、release 的 strip、R8 keep 规则）。它们各自的报错信息都不会指向真正的原因，所以动手前请先读 [ARCHITECTURE.md 的「构建约束」](ARCHITECTURE.md#构建约束)。
 
+## 发布
+
+打一个 `v*` 标签，GitHub Actions 会构建并开一个 **draft release**（`.github/workflows/release.yml`）。它产出的是**未签名**的 APK——签名在本地做，所以密钥既不进仓库也不进 CI，而 release 里也只会出现已签名的包。
+
+```bash
+# 只需一次：生成密钥。之后务必备份——Android 靠它认定「同一个应用」，
+# 换 key 意味着老用户装不上新版。
+keytool -genkeypair -v -keystore ~/hyalos-release.jks -alias hyalos \
+  -keyalg RSA -keysize 4096 -validity 10000
+
+# 每次发版：从那次 Actions 运行的 artifacts 里下载 app-release-unsigned.apk
+"$ANDROID_HOME/build-tools/37.0.0/apksigner" sign \
+  --ks ~/hyalos-release.jks --out app-release.apk app-release-unsigned.apk
+
+# 传进 draft release，再到网页上发布
+gh release upload v0.1.0 app-release.apk
+```
+
+**先手动触发一次**（Actions 页面上的 `workflow_dispatch`）确认工具链跑得通，再打标签——首次运行大概率要调一两次，见下。
+
 ## 许可证
 
 GPL-3.0-or-later。见 [LICENSE](LICENSE)。

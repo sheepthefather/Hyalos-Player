@@ -1,0 +1,105 @@
+# Builds a release APK and opens a draft GitHub Release for a version tag.
+#
+# The APK this produces is **unsigned**. Signing happens on the maintainer's
+# machine and the signed APK is attached to the draft by hand, so a release
+# never carries an unsigned package and the signing key never leaves the machine
+# that holds it. See "Signing" in README.md for the commands.
+#
+# `workflow_dispatch` runs the same build without touching any release, which is
+# the way to shake the toolchain out before cutting a tag.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout, both layers of submodule
+        uses: actions/checkout@v4
+        with:
+          # Krystallos is a submodule, and it embeds libsmb2 as one of its own.
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Rust targets for Android
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+
+      # `cargo install` builds it from source, so it is cached by the binary it
+      # lands rather than by a registry.
+      - uses: actions/cache@v4
+        id: cargo-ndk
+        with:
+          path: ~/.cargo/bin/cargo-ndk
+          key: cargo-ndk-4.1.2
+
+      - name: Install cargo-ndk
+        if: steps.cargo-ndk.outputs.cache-hit != 'true'
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      # The runner image ships an Android SDK, but not necessarily this
+      # project's: it compiles against API 37 and builds the kernel with NDK 30.
+      #
+      # ⚠️ The platform package name is the one thing here I could not verify
+      # without running it — AGP 9 addresses SDK 37 as `android-37.0` (major.minor
+      # versions), while `sdkmanager` has historically used `android-37`. If this
+      # step fails with "package not found", list what is on offer with
+      # `sdkmanager --list | grep android-37` and use that name.
+      - name: Android SDK platform, build tools and NDK
+        run: |
+          sdkmanager="$(command -v sdkmanager || echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager")"
+          yes | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "ndk;30.0.16248370"
+
+      # The kernel's build script drives CMake through the `cmake` crate, which
+      # takes whatever is on PATH, and points it at the NDK's own toolchain file.
+      - name: CMake
+        run: cmake --version
+
+      - name: Unit tests
+        run: ./gradlew test
+
+      - name: Assemble release
+        run: ./gradlew assembleRelease
+
+      - name: Upload the unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-unsigned
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+          # Long enough to sign and attach it at leisure.
+          retention-days: 30
+
+      # Kept because R8 renames everything: without it a crash report from a
+      # release build cannot be read back.
+      - name: Upload the R8 mapping
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 30
+
+      # A draft, not a release: it holds the tag and the generated notes, and
+      # waits for the signed APK and a human deciding it is ready.
+      - name: Open a draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
