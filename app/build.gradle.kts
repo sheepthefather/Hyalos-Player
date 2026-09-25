@@ -17,6 +17,8 @@ plugins {
     // No Kotlin Android plugin: AGP 9 compiles Kotlin itself and the standalone
     // plugin is incompatible with its new DSL.
     alias(libs.plugins.kotlin.compose)
+    // Navigation 3 routes and the stored server list are @Serializable.
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -36,6 +38,8 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -72,14 +76,39 @@ dependencies {
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
 
+    implementation(libs.androidx.navigation3.runtime)
+    implementation(libs.androidx.navigation3.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.datastore)
+
     implementation(libs.media3.exoplayer)
-    implementation(libs.media3.session)
+    implementation(libs.media3.ui)
+
+    implementation(libs.tink.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.android)
 
     // `@aar`, not the default jar. The jar has no native libraries, and the
     // generated bindings load the Rust library through JNA's direct mapping —
     // without libjnidispatch.so inside the APK this fails at run time with an
     // UnsatisfiedLinkError that names neither JNA nor the missing variant.
     implementation(variantOf(libs.jna) { artifactType("aar") })
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    // Heavy (it pulls in transformer and mockito), but it carries Media3's own
+    // DataSourceContractTest, which checks the DataSource contract far more
+    // thoroughly than hand-written tests would. androidTest only.
+    androidTestImplementation(libs.media3.test.utils)
+    // The contract test mocks a TransferListener; on a device that needs
+    // Mockito's Android mock maker.
+    androidTestImplementation(libs.mockito.android)
 }
 
 // ---------------------------------------------------------------------------

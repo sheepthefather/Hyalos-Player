@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for API 31+. See backup_rules.xml for why these files are
+  excluded. Both sections are needed: device-to-device transfer does not carry
+  Keystore keys either.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="hyalos_keyset_prefs.xml" />
+        <exclude domain="file" path="datastore/credentials.json" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="hyalos_keyset_prefs.xml" />
+        <exclude domain="file" path="datastore/credentials.json" />
+    </device-transfer>
+</data-extraction-rules>

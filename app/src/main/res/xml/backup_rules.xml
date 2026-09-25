@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for API 29-30. API 31+ reads data_extraction_rules.xml instead;
+  the two must exclude the same files.
+
+  The encrypted passwords and the Tink keyset are excluded because the key that
+  decrypts them lives in the Android Keystore, which is never backed up. Restored
+  without it they would be undecryptable noise. The server list (servers.json) is
+  kept, so a restore only costs re-entering passwords.
+
+  File names must match CredentialStore.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="hyalos_keyset_prefs.xml" />
+    <exclude domain="file" path="datastore/credentials.json" />
+</full-backup-content>
