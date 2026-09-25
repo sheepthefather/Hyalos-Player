@@ -94,13 +94,15 @@ class BrowserViewModel(
     /** A delete waiting on confirmation, and how much it would actually remove. */
     data class DeletePrompt(val items: List<RemoteItem>, val total: Int, val truncated: Boolean)
 
-    /** In selection mode a tap selects; otherwise it opens. */
-    var selecting by mutableStateOf(false)
+    /** What is selected. See [Selection] for why the state lives in one object. */
+    var selection by mutableStateOf(Selection.NONE)
         private set
 
+    /** In selection mode a tap selects; otherwise it opens. */
+    val selecting: Boolean get() = selection.active
+
     /** Names of the selected entries, exactly as the listing reports them. */
-    var selected by mutableStateOf<Set<String>>(emptySet())
-        private set
+    val selected: Set<String> get() = selection.names
 
     /** The operation in flight, or `null`. */
     var busy by mutableStateOf<Operation?>(null)
@@ -127,8 +129,7 @@ class BrowserViewModel(
      * which is where the two cases genuinely diverge.
      */
     fun onLongPress(item: BrowserItem) {
-        selecting = true
-        selected = selected + item.name
+        selection = selection.select(item.name)
     }
 
     fun onTap(item: BrowserItem, open: () -> Unit) {
@@ -136,13 +137,11 @@ class BrowserViewModel(
     }
 
     fun toggleSelection(name: String) {
-        selected = if (name in selected) selected - name else selected + name
-        if (selected.isEmpty()) selecting = false
+        selection = selection.toggle(name)
     }
 
     fun clearSelection() {
-        selecting = false
-        selected = emptySet()
+        selection = Selection.NONE
     }
 
     // ---------------------------------------------------------------------
@@ -163,9 +162,14 @@ class BrowserViewModel(
         val target = remoteOf(item)
         run(Operation.RENAME) {
             val result = attempt(target) { container.files.rename(target, newName) }
-            // Re-read the directory: the server has the new name, and a listing
-            // still showing the old one looks like the rename failed.
-            if (result.succeeded > 0) load(refresh = true)
+            if (result.succeeded > 0) {
+                // Done with it: leaving the item selected would keep the toolbar
+                // up for an action that has already happened.
+                clearSelection()
+                // Re-read the directory: the server has the new name, and a
+                // listing still showing the old one looks like the rename failed.
+                load(refresh = true)
+            }
             result
         }
     }
@@ -296,7 +300,16 @@ class BrowserViewModel(
         viewModelScope.launch {
             combine(entries, container.settings.settings) { raw, settings ->
                 raw?.let { EntrySorting.prepare(it, settings.sortKey, settings.sortAscending, nameOrder) }
-            }.collect { sorted -> if (sorted != null) state = State.Loaded(sorted) }
+            }.collect { sorted ->
+                if (sorted != null) {
+                    // A selection holds names, and names stop existing — after a
+                    // rename, a delete, or a change made by somebody else. Left
+                    // alone they would have the toolbar counting items that are
+                    // not on screen and cannot be acted on.
+                    selection = selection.prune(sorted.mapTo(mutableSetOf()) { it.name })
+                    state = State.Loaded(sorted)
+                }
+            }
         }
 
         load()
