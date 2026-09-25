@@ -9,7 +9,6 @@
     <string name="retry">重试</string>
     <string name="refresh">刷新</string>
     <string name="more">更多</string>
-    <string name="loading">正在加载…</string>
 
     <!-- 服务器列表 -->
     <string name="servers_title">服务器</string>
@@ -36,7 +35,7 @@
     <string name="field_password_keep">留空则保留已保存的密码</string>
     <string name="field_domain">域 / 工作组（可选）</string>
     <string name="field_seal">SMB3 加密</string>
-    <string name="field_seal_hint">在不可信的网络上开启。开启后读取速度约降为原来的 1/96（实测 280 → 3 MiB/s）。</string>
+    <string name="field_seal_hint">在不受信任的网络上开启（如公共 Wi-Fi）。开启后会明显降低读取速度。</string>
     <string name="password_show">显示密码</string>
     <string name="password_hide">隐藏密码</string>
     <string name="test_connection">测试连接</string>
