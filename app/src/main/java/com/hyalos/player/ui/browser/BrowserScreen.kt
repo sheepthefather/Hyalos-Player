@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
@@ -30,6 +32,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
 import com.hyalos.player.data.BrowserLayout
+import com.hyalos.player.data.SortKey
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.ui.common.CenteredMessage
 import com.hyalos.player.ui.common.ErrorState
@@ -76,6 +82,8 @@ fun BrowserScreen(
     val unplayable = stringResource(R.string.browser_unplayable)
     val title = RemotePath.name(viewModel.path).ifEmpty { viewModel.serverName }
     val layout by viewModel.layout.collectAsStateWithLifecycle()
+    val sortKey by viewModel.sortKey.collectAsStateWithLifecycle()
+    val sortAscending by viewModel.sortAscending.collectAsStateWithLifecycle()
     val grid = layout == BrowserLayout.GRID
 
     Scaffold(
@@ -89,6 +97,12 @@ fun BrowserScreen(
                         }
                     },
                     actions = {
+                        SortMenu(
+                            key = sortKey,
+                            ascending = sortAscending,
+                            onPickKey = viewModel::setSortKey,
+                            onPickDirection = viewModel::setSortAscending,
+                        )
                         // The icon shows the view being switched *to*, which is
                         // what tapping it will do; the description says so in words.
                         IconButton(onClick = viewModel::toggleLayout) {
@@ -196,6 +210,78 @@ private fun GridEntries(
             }
         }
     }
+}
+
+/**
+ * Picks what a directory is ordered by, and which way.
+ *
+ * The two are one menu rather than two because they are one decision: "date,
+ * newest first" is a single intent, and splitting it would mean dismissing one
+ * menu to open another. A check mark on each row shows what is currently set,
+ * so neither the key nor the direction has to be remembered.
+ */
+@Composable
+private fun SortMenu(
+    key: SortKey,
+    ascending: Boolean,
+    onPickKey: (SortKey) -> Unit,
+    onPickDirection: (Boolean) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val keys = listOf(
+        SortKey.NAME to R.string.sort_name,
+        SortKey.DATE to R.string.sort_date,
+        SortKey.SIZE to R.string.sort_size,
+        SortKey.TYPE to R.string.sort_type,
+    )
+
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(painterResource(R.drawable.ic_sort), stringResource(R.string.browser_sort))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            keys.forEach { (option, label) ->
+                MenuRow(
+                    label = stringResource(label),
+                    selected = option == key,
+                    onClick = {
+                        open = false
+                        onPickKey(option)
+                    },
+                )
+            }
+            HorizontalDivider()
+            MenuRow(
+                label = stringResource(R.string.sort_ascending),
+                selected = ascending,
+                onClick = {
+                    open = false
+                    onPickDirection(true)
+                },
+            )
+            MenuRow(
+                label = stringResource(R.string.sort_descending),
+                selected = !ascending,
+                onClick = {
+                    open = false
+                    onPickDirection(false)
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        trailingIcon = {
+            if (selected) {
+                Icon(painterResource(R.drawable.ic_check), null, Modifier.size(20.dp))
+            }
+        },
+        onClick = onClick,
+    )
 }
 
 /**

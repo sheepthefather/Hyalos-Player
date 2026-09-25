@@ -3,6 +3,7 @@ package com.hyalos.player.ui.browser
 import android.icu.text.Collator
 import android.icu.text.RuleBasedCollator
 import android.icu.util.ULocale
+import com.hyalos.player.data.SortKey
 import uniffi.krystallos_ffi.DirEntry
 import uniffi.krystallos_ffi.Kind
 
@@ -29,14 +30,67 @@ data class BrowserItem(
  */
 object EntrySorting {
 
-    fun prepare(entries: List<DirEntry>, nameOrder: Comparator<String>): List<BrowserItem> =
-        entries
+    /**
+     * Filter, classify and order a raw listing.
+     *
+     * **Directories stay on top in every order.** Sorting strictly by size would
+     * otherwise bury a folder among the large files, and folders are the thing a
+     * browser is mostly used to navigate. Each group is ordered independently.
+     *
+     * Every key falls back to the name order for ties, so a directory of
+     * same-sized files (or one where the server reports no dates at all — SMB
+     * does this) still comes out in a stable, readable order rather than
+     * shuffling between listings.
+     */
+    fun prepare(
+        entries: List<DirEntry>,
+        key: SortKey = SortKey.NAME,
+        ascending: Boolean = true,
+        nameOrder: Comparator<String>,
+    ): List<BrowserItem> {
+        val byName = Comparator<BrowserItem> { a, b -> nameOrder.compare(a.name, b.name) }
+        val byKey: Comparator<BrowserItem> = when (key) {
+            SortKey.NAME -> byName
+            SortKey.DATE -> tieBreakWithName(byName) { a, b -> absentLast(a.modifiedMs, b.modifiedMs) }
+            SortKey.SIZE -> tieBreakWithName(byName) { a, b -> absentLast(a.size, b.size) }
+            // Extensions are ASCII, so the locale collator would only add noise.
+            SortKey.TYPE -> tieBreakWithName(byName) { a, b -> extensionOf(a.name).compareTo(extensionOf(b.name)) }
+        }
+        // Reversing the whole comparator flips the tie-break too, which is what
+        // "descending" means everywhere else.
+        val ordered = if (ascending) byKey else byKey.reversed()
+
+        return entries
             .filterNot { isHidden(it.name) }
             .map { it.toItem() }
-            .sortedWith(
-                compareBy<BrowserItem> { it.kind != BrowserItem.Kind.DIRECTORY }
-                    .thenBy(nameOrder) { it.name },
-            )
+            .sortedWith(compareBy<BrowserItem> { it.kind != BrowserItem.Kind.DIRECTORY }.then(ordered))
+    }
+
+    /** What "type" sorts by: the extension, without the dot, case-folded. */
+    private fun extensionOf(name: String): String =
+        name.substringAfterLast('.', "").lowercase()
+
+    private fun tieBreakWithName(
+        byName: Comparator<BrowserItem>,
+        compare: (BrowserItem, BrowserItem) -> Int,
+    ): Comparator<BrowserItem> = Comparator { a, b ->
+        compare(a, b).takeIf { it != 0 } ?: byName.compare(a, b)
+    }
+
+    /**
+     * Compare two optional values, sorting the absent ones **last**.
+     *
+     * Servers do omit timestamps — SMB reports zero and that becomes `None` — and
+     * a directory has no meaningful size. Treating those as zero would scatter
+     * them through the list pretending to be from 1970 or to be empty; putting
+     * them at the end keeps the real values together.
+     */
+    private fun <T : Comparable<T>> absentLast(a: T?, b: T?): Int = when {
+        a == null && b == null -> 0
+        a == null -> 1
+        b == null -> -1
+        else -> a.compareTo(b)
+    }
 
     /**
      * Dot-files, plus the housekeeping folders Windows and Synology put at the

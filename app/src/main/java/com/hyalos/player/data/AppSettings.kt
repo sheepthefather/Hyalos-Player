@@ -28,6 +28,10 @@ data class AppSettings(
      * to browse, not a property of any one NAS.
      */
     val browserLayout: BrowserLayout = BrowserLayout.LIST,
+
+    /** What the browser orders a directory by, and which direction. */
+    val sortKey: SortKey = SortKey.NAME,
+    val sortAscending: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_THUMBNAIL_CACHE_MB = 100
@@ -40,3 +44,7 @@ data class AppSettings(
 /** A directory as rows of text, or as tiles of thumbnails. */
 @Serializable
 enum class BrowserLayout { LIST, GRID }
+
+/** What the file browser orders entries by. */
+@Serializable
+enum class SortKey { NAME, DATE, SIZE, TYPE }

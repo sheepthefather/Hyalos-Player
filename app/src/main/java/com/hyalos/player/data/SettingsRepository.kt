@@ -20,6 +20,14 @@ class SettingsRepository(private val store: DataStore<AppSettings>) {
         store.updateData { it.copy(browserLayout = layout) }
     }
 
+    suspend fun setSortKey(key: SortKey) {
+        store.updateData { it.copy(sortKey = key) }
+    }
+
+    suspend fun setSortAscending(ascending: Boolean) {
+        store.updateData { it.copy(sortAscending = ascending) }
+    }
+
     companion object {
         fun create(context: Context): SettingsRepository = SettingsRepository(
             DataStoreFactory.create(
