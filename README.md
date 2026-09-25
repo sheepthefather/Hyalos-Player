@@ -17,7 +17,7 @@ Android 局域网媒体播放器。把 NAS 上的影片当作本地文件来浏�
 | 播放（Media3 + `KrystallosDataSource`） | ✅ |
 | 后台播放 / MediaSession、续播、字幕、局域网发现 | ⬜ |
 
-**模拟器上验证不了画面。** 本机模拟器把任何视频都渲染成纯绿色（系统自带播放器同样如此），所以画面正确性需要在真机上确认；模拟器能验证的是解码启动、时长解析、位置推进与 seek。详见 [ARCHITECTURE.md](ARCHITECTURE.md#已知风险)。
+**在模拟器上跑要注意**：AVD 需以 `-feature -HardwareDecoder` 启动，否则所有视频都会渲染成纯绿色——模拟器声明的 goldfish 硬件解码器的输出会丢色度。关掉它之后播放器回退到 AOSP 软件解码器，画面正常。详见 [ARCHITECTURE.md](ARCHITECTURE.md#已知风险)。
 
 ## 前置条件
 
