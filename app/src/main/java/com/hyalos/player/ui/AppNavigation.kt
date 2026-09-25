@@ -191,6 +191,10 @@ private fun RouteStack(
                     viewModel = viewModel {
                         PlayerViewModel(container, key.serverId, key.path, key.fromPlaylist)
                     },
+                    // Pushed rather than switched to: the player keeps its
+                    // ViewModel on the stack below, so coming back resumes the
+                    // same film where it was.
+                    onOpenSettings = { backStack.add(Route.SettingsPlayback) },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }

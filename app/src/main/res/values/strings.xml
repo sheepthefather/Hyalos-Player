@@ -155,6 +155,7 @@
     <string name="player_error_format">不支持这个文件的格式或编码</string>
     <string name="player_error_decoder">设备无法解码这个文件</string>
     <string name="player_error_generic">播放失败</string>
+    <string name="player_settings">播放设置</string>
 
     <!-- 关于 -->
     <string name="about_version">版本 %1$s</string>

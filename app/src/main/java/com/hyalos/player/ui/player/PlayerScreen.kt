@@ -59,7 +59,11 @@ import com.hyalos.player.playback.PlaybackErrors
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
+fun PlayerScreen(
+    viewModel: PlayerViewModel,
+    onOpenSettings: () -> Unit,
+    onBack: () -> Unit,
+) {
     val player = viewModel.player
     val videoScale by viewModel.videoScale.collectAsStateWithLifecycle()
     val title by viewModel.title.collectAsStateWithLifecycle()
@@ -132,18 +136,31 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                         ),
                     ),
             )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
+            // Back, title and settings across one bar: the title centred on the
+            // screen, the two controls at the ends. Centred rather than tucked
+            // against the back button because a short name in the middle of a
+            // wide black bar reads as a title, where one huddled at the left
+            // reads as text that happens to be there.
+            Box(
+                Modifier
                     .align(Alignment.TopStart)
+                    .fillMaxWidth()
                     .safeDrawingPadding()
-                    .padding(start = 4.dp, end = 16.dp),
+                    .height(TOP_BAR_HEIGHT),
             ) {
                 IconButton(
                     onClick = onBack,
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
                 ) {
                     Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
+                }
+                IconButton(
+                    onClick = onOpenSettings,
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp),
+                ) {
+                    Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.player_settings))
                 }
                 Text(
                     text = title,
@@ -155,7 +172,11 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
                     // where the episode number usually sits.
                     overflow = TextOverflow.Clip,
                     modifier = Modifier
-                        .weight(1f)
+                        .align(Alignment.Center)
+                        // Room for the two buttons, equal on both sides so the
+                        // title is centred on the screen rather than in whatever
+                        // space the buttons happen to leave.
+                        .padding(horizontal = TOP_BAR_BUTTON_ROOM)
                         // Scrolls only when the name does not fit, so a short
                         // title is simply still.
                         .basicMarquee(),
@@ -197,6 +218,11 @@ private fun VideoScale.toResizeMode(): Int = when (this) {
  * cover the row on a device whose inset is large.
  */
 private val TOP_SCRIM_HEIGHT = 120.dp
+
+private val TOP_BAR_HEIGHT = 56.dp
+
+/** Clearance for the back and settings buttons, so the title never sits under one. */
+private val TOP_BAR_BUTTON_ROOM = 64.dp
 
 @Composable
 private fun Immersive() {
