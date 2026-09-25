@@ -12,6 +12,7 @@ import com.hyalos.player.ui.common.UiError
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import uniffi.krystallos_ffi.SmbInfo
 import java.util.UUID
 
 class ServerEditViewModel(
@@ -36,7 +37,12 @@ class ServerEditViewModel(
     sealed interface TestState {
         data object Idle : TestState
         data object Running : TestState
-        data object Ok : TestState
+
+        /**
+         * Connected. [info] is what the handshake settled on, or `null` when the
+         * backend has nothing to report.
+         */
+        data class Ok(val info: SmbInfo?) : TestState
         data class Failed(val error: UiError) : TestState
     }
 
@@ -101,8 +107,8 @@ class ServerEditViewModel(
         test = TestState.Running
         testJob = viewModelScope.launch {
             test = try {
-                container.sessions.test(config, form.password.ifEmpty { null } ?: savedPassword())
-                TestState.Ok
+                val info = container.sessions.test(config, form.password.ifEmpty { null } ?: savedPassword())
+                TestState.Ok(info)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 TestState.Failed(e.toUiError())

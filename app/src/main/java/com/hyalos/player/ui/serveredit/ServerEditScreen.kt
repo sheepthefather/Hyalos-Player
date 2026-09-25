@@ -179,10 +179,21 @@ private fun TestRow(viewModel: ServerEditViewModel) {
                     Text(stringResource(R.string.test_connection))
                 }
                 when (test) {
-                    TestState.Ok -> Text(
-                        stringResource(R.string.test_ok),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+                    is TestState.Ok -> Column {
+                        Text(stringResource(R.string.test_ok), color = MaterialTheme.colorScheme.primary)
+                        test.info?.let { info ->
+                            Text(
+                                stringResource(
+                                    R.string.test_ok_detail,
+                                    dialectName(info.dialect.toInt()),
+                                    blockSize(info.maxReadSize.toLong()),
+                                    blockSize(info.maxWriteSize.toLong()),
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                     is TestState.Failed -> Text(
                         test.error.text(),
                         color = MaterialTheme.colorScheme.error,
@@ -238,6 +249,30 @@ private fun PasswordField(value: String, onChange: (String) -> Unit, supporting:
         },
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * SMB numbers its dialects; this is the one place they become words.
+ *
+ * The kernel reports the number because the numbering is the protocol's — the
+ * wording, and the language, are the caller's business.
+ */
+private fun dialectName(dialect: Int): String = when (dialect) {
+    0x0202 -> "SMB 2.0.2"
+    0x0210 -> "SMB 2.1"
+    0x0300 -> "SMB 3.0"
+    0x0302 -> "SMB 3.0.2"
+    0x0311 -> "SMB 3.1.1"
+    // A dialect newer than this build knows about: show the number rather than
+    // a wrong name or a blank.
+    else -> "SMB 0x%04X".format(dialect)
+}
+
+/** Transfer sizes, in the largest unit that stays whole. */
+private fun blockSize(bytes: Long): String = when {
+    bytes >= 1024 * 1024 -> "${bytes / (1024 * 1024)} MiB"
+    bytes >= 1024 -> "${bytes / 1024} KiB"
+    else -> "$bytes B"
 }
 
 private fun Problem.message(): Int = when (this) {

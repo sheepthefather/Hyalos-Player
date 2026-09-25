@@ -14,6 +14,7 @@ import uniffi.krystallos_ffi.DirEntry
 import uniffi.krystallos_ffi.Kernel
 import uniffi.krystallos_ffi.KernelException
 import uniffi.krystallos_ffi.Session
+import uniffi.krystallos_ffi.SmbInfo
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -55,11 +56,15 @@ class SessionManager(
     /**
      * Connect with settings that are not saved yet, list [ServerConfig.startPath],
      * and disconnect. What the edit screen's "test connection" does.
+     *
+     * Returns what the connection negotiated — `null` when the backend has
+     * nothing to report, which is the case for a local directory.
      */
-    suspend fun test(server: ServerConfig, password: String?) {
+    suspend fun test(server: ServerConfig, password: String?): SmbInfo? {
         val session = connect(request(server, password))
         try {
             session.list(server.startPath)
+            return session.smbInfo()
         } finally {
             session.shutdown()
         }
