@@ -59,6 +59,10 @@ android {
 
     buildFeatures {
         compose = true
+        // For BuildConfig.VERSION_NAME, which the About page shows. Nothing here
+        // reads a build flag at runtime otherwise; Compose needs no flag of its
+        // own beyond the line above.
+        buildConfig = true
     }
 
     packaging {

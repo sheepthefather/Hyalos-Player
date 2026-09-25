@@ -16,8 +16,13 @@ import com.hyalos.player.ui.serveredit.ServerEditScreen
 import com.hyalos.player.ui.serveredit.ServerEditViewModel
 import com.hyalos.player.ui.servers.ServerListScreen
 import com.hyalos.player.ui.servers.ServerListViewModel
+import com.hyalos.player.ui.settings.AboutScreen
+import com.hyalos.player.ui.settings.PlaybackSettingsScreen
+import com.hyalos.player.ui.settings.PlaybackSettingsViewModel
 import com.hyalos.player.ui.settings.SettingsScreen
 import com.hyalos.player.ui.settings.SettingsViewModel
+import com.hyalos.player.ui.settings.StorageSettingsScreen
+import com.hyalos.player.ui.settings.StorageSettingsViewModel
 
 @Composable
 fun AppNavigation(container: AppContainer) {
@@ -47,8 +52,26 @@ fun AppNavigation(container: AppContainer) {
             entry<Route.Settings> {
                 SettingsScreen(
                     viewModel = viewModel { SettingsViewModel(container) },
+                    onOpenPlayback = { backStack.add(Route.SettingsPlayback) },
+                    onOpenStorage = { backStack.add(Route.SettingsStorage) },
+                    onOpenAbout = { backStack.add(Route.SettingsAbout) },
                     onBack = { backStack.removeLastOrNull() },
                 )
+            }
+            entry<Route.SettingsPlayback> {
+                PlaybackSettingsScreen(
+                    viewModel = viewModel { PlaybackSettingsViewModel(container) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<Route.SettingsStorage> {
+                StorageSettingsScreen(
+                    viewModel = viewModel { StorageSettingsViewModel(container) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<Route.SettingsAbout> {
+                AboutScreen(onBack = { backStack.removeLastOrNull() })
             }
             entry<Route.EditServer> { key ->
                 ServerEditScreen(

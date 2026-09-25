@@ -1,125 +1,25 @@
 package com.hyalos.player.ui.settings
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.AppSettings
-import com.hyalos.player.data.VideoScale
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 
 /**
- * The cache-limit control has two inputs — a slider and a text field — and both
- * are only written when the user is finished with them.
+ * The settings index. It owns no control — only the values its rows report.
  *
- * The reason is cost: storing the value triggers eviction, which walks the cache
- * directory. Writing on every slider frame or keystroke would mean dozens of
- * those walks per gesture. So the two controls own their own display state, and
- * only [commitSlider] / [commitCustom] reach the repository.
+ * Collected rather than read once, because the pages it links to write to the
+ * same repository while this one sits below them on the stack.
+ *
+ * [SharingStarted.Eagerly] rather than `WhileSubscribed`: this screen is not
+ * composed while a sub-page is on top, so a lazy start would re-subscribe on the
+ * way back and emit [AppSettings]'s defaults for a frame — the summaries would
+ * flash the wrong values before settling.
  */
-class SettingsViewModel(private val container: AppContainer) : ViewModel() {
-
-    /** Where the slider sits. Follows the finger, so it must not wait for a write. */
-    var sliderMb by mutableStateOf(0f)
-        private set
-
-    /** The text field, which is how values past the slider's end are entered. */
-    var customMb by mutableStateOf("")
-        private set
-
-    /** `null` until the stored value has been read. */
-    var storedMb by mutableStateOf<Int?>(null)
-        private set
-
-    /** `null` until the cache has been measured. */
-    var usageBytes by mutableStateOf<Long?>(null)
-        private set
-
-    private var customJob: Job? = null
-
-    val sliderMax = AppSettings.SLIDER_MAX_MB.toFloat()
-
-    /** Whether finishing a film starts the next one in its folder. */
-    var autoPlayNext by mutableStateOf(AppSettings().autoPlayNext)
-        private set
-
-    /** How video is fitted to the screen. */
-    var videoScale by mutableStateOf(AppSettings().videoScale)
-        private set
-
-    init {
-        viewModelScope.launch {
-            val settings = container.settings.settings.first()
-            show(settings.thumbnailCacheMb)
-            autoPlayNext = settings.autoPlayNext
-            videoScale = settings.videoScale
-            refreshUsage()
-        }
-    }
-
-    fun onAutoPlayNextChange(enabled: Boolean) {
-        autoPlayNext = enabled
-        viewModelScope.launch { container.settings.setAutoPlayNext(enabled) }
-    }
-
-    fun onVideoScaleChange(scale: VideoScale) {
-        videoScale = scale
-        viewModelScope.launch { container.settings.setVideoScale(scale) }
-    }
-
-    fun onSliderMove(value: Float) {
-        sliderMb = value
-    }
-
-    fun onSliderCommit() {
-        commit(sliderMb.roundToInt())
-    }
-
-    fun onCustomInput(text: String) {
-        // Digits only, and bounded: the field feeds a byte count.
-        customMb = text.filter { it.isDigit() }.take(6)
-        // Debounced rather than committed per keystroke, for the same reason the
-        // slider is not: "500" is three writes and three evictions otherwise.
-        customJob?.cancel()
-        customJob = viewModelScope.launch {
-            delay(COMMIT_DELAY_MS)
-            customMb.toIntOrNull()?.let { commit(it) }
-        }
-    }
-
-    fun clearCache() {
-        viewModelScope.launch {
-            container.thumbnails.clear()
-            refreshUsage()
-        }
-    }
-
-    private fun commit(megabytes: Int) {
-        viewModelScope.launch {
-            container.settings.setThumbnailCacheMb(megabytes)
-            show(megabytes)
-            refreshUsage()
-        }
-    }
-
-    /** Reflect a value in both controls: they are two views of one number. */
-    private fun show(megabytes: Int) {
-        storedMb = megabytes
-        sliderMb = megabytes.coerceIn(0, AppSettings.SLIDER_MAX_MB).toFloat()
-        customMb = megabytes.toString()
-    }
-
-    private suspend fun refreshUsage() {
-        usageBytes = container.thumbnails.usage()
-    }
-
-    private companion object {
-        const val COMMIT_DELAY_MS = 600L
-    }
+class SettingsViewModel(container: AppContainer) : ViewModel() {
+    val settings: StateFlow<AppSettings> = container.settings.settings
+        .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 }

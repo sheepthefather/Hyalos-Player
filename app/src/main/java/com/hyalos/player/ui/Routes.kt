@@ -18,6 +18,20 @@ sealed interface Route : NavKey {
     @Serializable
     data object Settings : Route
 
+    /**
+     * The pages under [Settings]. Each is a plain entry on the same stack rather
+     * than a nested graph: there is one level of depth, and pushing is the same
+     * `backStack.add` every other screen uses.
+     */
+    @Serializable
+    data object SettingsPlayback : Route
+
+    @Serializable
+    data object SettingsStorage : Route
+
+    @Serializable
+    data object SettingsAbout : Route
+
     /** `serverId == null` adds a new server. */
     @Serializable
     data class EditServer(val serverId: String? = null) : Route

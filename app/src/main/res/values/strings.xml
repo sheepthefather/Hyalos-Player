@@ -63,6 +63,15 @@
     <string name="settings_cache_clear">清除缓存</string>
     <string name="settings_cache_hint">浏览目录时会为视频取一帧作为缩略图并缓存，下次进同一目录无需重新取。滑块拉到「关闭」则不再生成，并清空已有缓存。</string>
 
+    <!-- 设置的入口列表：每行的副标题写回当前值 -->
+    <string name="settings_storage">存储</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_playback_summary">自动播放下一个：%1$s · 画面比例：%2$s</string>
+    <string name="settings_storage_summary">缩略图缓存上限：%1$s</string>
+    <string name="settings_about_summary">版本 %1$s</string>
+    <string name="state_on">开</string>
+    <string name="state_off">关</string>
+
     <!-- 错误 -->
     <string name="error_auth">认证失败，请检查用户名和密码</string>
     <string name="error_connection">无法连接到服务器，或连接已中断</string>
@@ -126,4 +135,13 @@
     <string name="player_error_format">不支持这个文件的格式或编码</string>
     <string name="player_error_decoder">设备无法解码这个文件</string>
     <string name="player_error_generic">播放失败</string>
+
+    <!-- 关于 -->
+    <string name="about_version">版本 %1$s</string>
+    <string name="about_license_title">许可</string>
+    <string name="about_license_body">本应用以 GPL-3.0-or-later 发布。网络内核 Krystallos 同为 GPL-3.0，其中内置的 libsmb2 为 LGPL-2.1-or-later。</string>
+    <string name="about_project">项目主页</string>
+    <!-- The scheme is part of the string: this is both what is shown and what is opened. -->
+    <string name="about_project_url">https://github.com/sheepthefather/Hyalos-Player</string>
+    <string name="about_project_no_browser">没有能打开链接的应用</string>
 </resources>
