@@ -222,5 +222,15 @@ private val THUMBNAIL_WIDTH = 64.dp
 private val THUMBNAIL_HEIGHT = 36.dp
 private val THUMBNAIL_ASPECT = 16f / 9f
 
-/** Narrower would fit three columns of unreadably small tiles on a phone. */
-private val GRID_MIN_CELL = 150.dp
+/**
+ * The narrowest a tile may be before the grid drops a column.
+ *
+ * Sized so a phone held upright shows three across: a 16:9 frame about 2.4 cm
+ * wide, which is what a video library wants — big enough to recognise the film,
+ * small enough to see a shelf of them at once.
+ *
+ * It was 150.dp, on the reasoning that three columns would be "unreadably
+ * small". That is true of text and not of thumbnails; at 121dp a frame is still
+ * plainly which film it is.
+ */
+private val GRID_MIN_CELL = 110.dp
