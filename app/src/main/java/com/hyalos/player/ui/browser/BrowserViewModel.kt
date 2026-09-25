@@ -13,12 +13,14 @@ import com.hyalos.player.files.ClipboardMode
 import com.hyalos.player.files.FileOperations
 import com.hyalos.player.files.OperationResult
 import com.hyalos.player.files.RemoteItem
+import com.hyalos.player.kernel.describesThePath
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
 import com.hyalos.player.ui.common.UiError
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import uniffi.krystallos_ffi.KernelException
 import uniffi.krystallos_ffi.DirEntry
 
 /**
@@ -359,15 +362,44 @@ class BrowserViewModel(
         job?.cancel()
         if (refresh && state is State.Loaded) refreshing = true else state = State.Loading
         job = viewModelScope.launch {
+            var attempt = 0
             try {
-                entries.value = container.sessions.list(serverId, path)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                // Cleared so a later settings change cannot resurrect the stale
-                // listing over the error the user is looking at.
-                entries.value = null
-                state = State.Failed(e.toUiError())
+                while (true) {
+                    try {
+                        entries.value = container.sessions.list(serverId, path)
+                        return@launch
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        // Cleared so a later settings change cannot resurrect a
+                        // stale listing over whatever the user is looking at.
+                        entries.value = null
+
+                        // An answer about the path is final — reconnecting will
+                        // not make a missing file appear.
+                        if ((e as? KernelException)?.describesThePath == true) {
+                            state = State.Failed(e.toUiError())
+                            return@launch
+                        }
+
+                        if (attempt < FAST_ATTEMPTS - 1) {
+                            // Fast retries first, without bothering the user:
+                            // coming back to a directory should not mean tapping
+                            // a button, and most dropped connections are back
+                            // within a second or two.
+                            attempt++
+                            delay(RETRY_DELAY_MS * attempt)
+                        } else {
+                            // Still failing — say so, but keep trying quietly.
+                            // The alternative is an error screen that stays
+                            // wrong after the server comes back until somebody
+                            // taps it, which is exactly what a retry button is
+                            // bad at.
+                            state = State.Failed(e.toUiError())
+                            delay(QUIET_RETRY_MS)
+                        }
+                    }
+                }
             } finally {
                 refreshing = false
             }
@@ -377,5 +409,21 @@ class BrowserViewModel(
     private companion object {
         /** Shared with the player, so a playlist orders names the same way. */
         val nameOrder = EntrySorting.systemOrder
+
+        /** Attempts before the failure is shown at all. */
+        const val FAST_ATTEMPTS = 3
+
+        /** Linear backoff for those: 1 s, then 2 s. */
+        const val RETRY_DELAY_MS = 1000L
+
+        /**
+         * The cadence once the failure is on screen.
+         *
+         * Slow enough to be nothing on a server that is simply off, quick enough
+         * that a router rebooting is over before the user has finished reading
+         * the error. The loop dies with the screen, so this only runs while
+         * somebody is looking at it.
+         */
+        const val QUIET_RETRY_MS = 10_000L
     }
 }

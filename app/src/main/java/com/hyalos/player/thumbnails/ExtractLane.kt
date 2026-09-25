@@ -156,7 +156,13 @@ class LanePool(
                 }
             }
         } catch (e: Throwable) {
-            classify(e)
+            val failure = classify(e)
+            // A transient failure may be a session that died. Dropping it is
+            // what makes the next attempt — which the caller will make, since
+            // transient failures are deliberately not remembered — reconnect
+            // rather than ask the same dead connection again.
+            if (failure == Extraction.Transient) sources.forServer(key.serverId).invalidate()
+            failure
         }
     }
 

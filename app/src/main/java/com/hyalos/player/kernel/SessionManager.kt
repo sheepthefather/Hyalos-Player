@@ -82,11 +82,21 @@ class SessionManager(
         scope.launch { session.shutdown() }
     }
 
+    /**
+     * Run [block] on the cached session, reconnecting once if it turns out to be
+     * dead.
+     *
+     * Retried for anything that is not an answer about the path — see
+     * [describesThePath]. A listing is a read: repeating it costs one round trip
+     * and is the difference between recovering on its own and showing the user a
+     * retry button that would have worked.
+     */
     private suspend fun <T> withBrowseSession(serverId: String, block: suspend (Session) -> T): T {
         val session = browseSession(serverId)
         return try {
             block(session)
-        } catch (e: KernelException.ConnectionLost) {
+        } catch (e: KernelException) {
+            if (e.describesThePath) throw e
             // Only drop it if nobody replaced it in the meantime.
             if (sessions.remove(serverId, session)) scope.launch { session.shutdown() }
             block(browseSession(serverId))

@@ -10,6 +10,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DataSpec
 import kotlinx.coroutines.runBlocking
+import com.hyalos.player.kernel.describesThePath
 import uniffi.krystallos_ffi.KernelException
 import java.io.FileNotFoundException
 import java.io.InterruptedIOException
@@ -122,8 +123,12 @@ class KrystallosDataSource(
         runBlocking {
             try {
                 block()
-            } catch (e: KernelException.ConnectionLost) {
-                source.invalidate()
+            } catch (e: KernelException) {
+                // Anything that is not an answer about the path may mean the
+                // session is gone. Dropping it here is what makes ExoPlayer's
+                // retry reconnect: the retry re-opens at the same position, and
+                // re-opening asks for a reader, which connects if there is none.
+                if (!e.describesThePath) source.invalidate()
                 throw e
             }
         }
