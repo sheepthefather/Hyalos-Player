@@ -107,6 +107,10 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    // The BOM again, because androidTest does not inherit `implementation`'s
+    // platform constraint — without it the artifact below has no version.
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
     // Heavy (it pulls in transformer and mockito), but it carries Media3's own
     // DataSourceContractTest, which checks the DataSource contract far more
     // thoroughly than hand-written tests would. androidTest only.
