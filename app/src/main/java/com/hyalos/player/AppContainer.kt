@@ -4,7 +4,11 @@ import android.content.Context
 import com.hyalos.player.data.CredentialStore
 import com.hyalos.player.data.ServerRepository
 import com.hyalos.player.data.SettingsRepository
+import com.hyalos.player.files.FileClipboard
+import com.hyalos.player.files.FileOperations
+import com.hyalos.player.files.KernelFileSession
 import com.hyalos.player.kernel.SessionManager
+import com.hyalos.player.kernel.shutdown
 import com.hyalos.player.thumbnails.ExtractLane
 import com.hyalos.player.thumbnails.LanePool
 import com.hyalos.player.thumbnails.ThumbnailCache
@@ -56,6 +60,20 @@ class AppContainer(context: Context) {
     )
 
     val thumbnails = ThumbnailLoader(thumbnailCache, thumbnailLanes)
+
+    val clipboard = FileClipboard()
+
+    /**
+     * File operations get a connection of their own, never the browsing one.
+     *
+     * A kernel session runs one operation at a time with a 20-second timeout, so
+     * a copy running on the shared session would freeze the directory listing
+     * behind it for as long as the film takes.
+     */
+    val files = FileOperations { serverId ->
+        val session = sessions.connectDedicated(serverId)
+        FileOperations.OpenSession(KernelFileSession(session)) { session.shutdown() }
+    }
 
     init {
         // The limit is a setting; the cache is what acts on it. Collected here

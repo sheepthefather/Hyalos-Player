@@ -8,6 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.BrowserLayout
 import com.hyalos.player.data.SortKey
+import com.hyalos.player.files.ClipboardContent
+import com.hyalos.player.files.ClipboardMode
+import com.hyalos.player.files.FileOperations
+import com.hyalos.player.files.OperationResult
+import com.hyalos.player.files.RemoteItem
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
 import com.hyalos.player.ui.common.UiError
@@ -76,6 +81,209 @@ class BrowserViewModel(
     val sortAscending: StateFlow<Boolean> = container.settings.settings
         .map { it.sortAscending }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    // ---------------------------------------------------------------------
+    // Selection
+    // ---------------------------------------------------------------------
+
+    /** What a file operation is; also its label in the progress indicator. */
+    enum class Operation { RENAME, DELETE, COPY, MOVE }
+
+    data class Report(val operation: Operation, val result: OperationResult)
+
+    /** A delete waiting on confirmation, and how much it would actually remove. */
+    data class DeletePrompt(val items: List<RemoteItem>, val total: Int, val truncated: Boolean)
+
+    /** In selection mode a tap selects; otherwise it opens. */
+    var selecting by mutableStateOf(false)
+        private set
+
+    /** Names of the selected entries, exactly as the listing reports them. */
+    var selected by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    /** The operation in flight, or `null`. */
+    var busy by mutableStateOf<Operation?>(null)
+        private set
+
+    /** The last finished operation, for the report at the bottom of the screen. */
+    var report by mutableStateOf<Report?>(null)
+        private set
+
+    var renaming by mutableStateOf<BrowserItem?>(null)
+        private set
+
+    var deletePrompt by mutableStateOf<DeletePrompt?>(null)
+        private set
+
+    val clipboard: StateFlow<ClipboardContent?> = container.clipboard.content
+
+    /**
+     * A long press selects the item and enters selection mode.
+     *
+     * One mode covers both requests — acting on a single file and acting on
+     * several — because they are the same intent differing only in how many
+     * items are checked. Rename is offered only while exactly one is selected,
+     * which is where the two cases genuinely diverge.
+     */
+    fun onLongPress(item: BrowserItem) {
+        selecting = true
+        selected = selected + item.name
+    }
+
+    fun onTap(item: BrowserItem, open: () -> Unit) {
+        if (selecting) toggleSelection(item.name) else open()
+    }
+
+    fun toggleSelection(name: String) {
+        selected = if (name in selected) selected - name else selected + name
+        if (selected.isEmpty()) selecting = false
+    }
+
+    fun clearSelection() {
+        selecting = false
+        selected = emptySet()
+    }
+
+    // ---------------------------------------------------------------------
+    // File operations
+    // ---------------------------------------------------------------------
+
+    fun startRename(item: BrowserItem) {
+        renaming = item
+    }
+
+    fun cancelRename() {
+        renaming = null
+    }
+
+    fun commitRename(newName: String) {
+        val item = renaming ?: return
+        renaming = null
+        val target = remoteOf(item)
+        run(Operation.RENAME) {
+            val result = attempt(target) { container.files.rename(target, newName) }
+            // Re-read the directory: the server has the new name, and a listing
+            // still showing the old one looks like the rename failed.
+            if (result.succeeded > 0) load(refresh = true)
+            result
+        }
+    }
+
+    /**
+     * Ask to delete, counting first.
+     *
+     * The count is what turns "delete Series 3" into "delete 47 items", which is
+     * the difference between a considered decision and an accident.
+     */
+    fun askDelete() {
+        val items = selectedItems()
+        if (items.isEmpty()) return
+        run(null) {
+            val total = container.files.countContents(items)
+            deletePrompt = DeletePrompt(
+                items = items,
+                total = total,
+                truncated = total >= FileOperations.COUNT_LIMIT,
+            )
+            null
+        }
+    }
+
+    fun cancelDelete() {
+        deletePrompt = null
+    }
+
+    fun confirmDelete() {
+        val prompt = deletePrompt ?: return
+        deletePrompt = null
+        run(Operation.DELETE) {
+            val result = container.files.delete(prompt.items)
+            clearSelection()
+            load(refresh = true)
+            result
+        }
+    }
+
+    fun copySelected() {
+        container.clipboard.copy(selectedItems())
+        clearSelection()
+    }
+
+    fun cutSelected() {
+        container.clipboard.cut(selectedItems())
+        clearSelection()
+    }
+
+    fun paste() {
+        val content = container.clipboard.content.value ?: return
+        // The current directory is the destination; the session root has no name
+        // of its own, so it gets a placeholder for error messages.
+        val target = RemoteItem(
+            serverId = serverId,
+            path = path,
+            name = RemotePath.name(path).ifEmpty { "/" },
+            isDirectory = true,
+        )
+        val operation = if (content.mode == ClipboardMode.CUT) Operation.MOVE else Operation.COPY
+        run(operation) {
+            val result = if (content.mode == ClipboardMode.CUT) {
+                container.files.moveInto(content.items, target)
+            } else {
+                container.files.copyInto(content.items, target)
+            }
+            container.clipboard.consumeIfCut()
+            load(refresh = true)
+            result
+        }
+    }
+
+    fun dismissReport() {
+        report = null
+    }
+
+    /** Run one operation at a time, reporting whatever it managed to do. */
+    private fun run(operation: Operation?, block: suspend () -> OperationResult?) {
+        if (busy != null) return
+        viewModelScope.launch {
+            busy = operation
+            try {
+                val result = block()
+                // The operation itself may have set a report (counting does not).
+                if (result != null) report = Report(operation ?: Operation.COPY, result)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                report = Report(operation ?: Operation.COPY, OperationResult().also { it.recordFailure("", e) })
+            } finally {
+                busy = null
+            }
+        }
+    }
+
+    /** One item's operation, expressed as a result so the report is uniform. */
+    private suspend fun attempt(target: RemoteItem, block: suspend () -> Unit): OperationResult {
+        val result = OperationResult()
+        try {
+            block()
+            result.succeeded++
+        } catch (e: Exception) {
+            result.recordFailure(target.name, e)
+        }
+        return result
+    }
+
+    private fun remoteOf(item: BrowserItem) = RemoteItem(
+        serverId = serverId,
+        path = RemotePath.join(path, item.name),
+        name = item.name,
+        isDirectory = item.kind == BrowserItem.Kind.DIRECTORY,
+    )
+
+    private fun selectedItems(): List<RemoteItem> =
+        (state as? State.Loaded)?.items.orEmpty()
+            .filter { it.name in selected }
+            .map { remoteOf(it) }
 
     private var job: Job? = null
 

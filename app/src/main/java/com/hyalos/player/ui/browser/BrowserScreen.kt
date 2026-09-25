@@ -3,6 +3,13 @@ package com.hyalos.player.ui.browser
 import android.graphics.Bitmap
 import android.text.format.DateUtils
 import android.text.format.Formatter
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -84,41 +91,58 @@ fun BrowserScreen(
     val layout by viewModel.layout.collectAsStateWithLifecycle()
     val sortKey by viewModel.sortKey.collectAsStateWithLifecycle()
     val sortAscending by viewModel.sortAscending.collectAsStateWithLifecycle()
+    val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
     val grid = layout == BrowserLayout.GRID
+
+    // Dialogs and the progress indicator live here rather than in the listing,
+    // so they survive a refresh that replaces every item.
+    RenameDialog(viewModel)
+    DeleteDialog(viewModel)
+    BusyDialog(viewModel.busy)
+    ReportSnackbar(viewModel, snackbar)
 
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
-                        }
-                    },
-                    actions = {
-                        SortMenu(
-                            key = sortKey,
-                            ascending = sortAscending,
-                            onPickKey = viewModel::setSortKey,
-                            onPickDirection = viewModel::setSortAscending,
-                        )
-                        // The icon shows the view being switched *to*, which is
-                        // what tapping it will do; the description says so in words.
-                        IconButton(onClick = viewModel::toggleLayout) {
-                            Icon(
-                                painterResource(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view),
-                                stringResource(
-                                    if (grid) R.string.browser_switch_to_list else R.string.browser_switch_to_grid,
-                                ),
+                if (viewModel.selecting) {
+                    SelectionBar(viewModel)
+                } else {
+                    TopAppBar(
+                        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
+                            }
+                        },
+                        actions = {
+                            if (clipboard != null) {
+                                IconButton(onClick = viewModel::paste) {
+                                    Icon(painterResource(R.drawable.ic_paste), stringResource(R.string.action_paste))
+                                }
+                            }
+                            SortMenu(
+                                key = sortKey,
+                                ascending = sortAscending,
+                                onPickKey = viewModel::setSortKey,
+                                onPickDirection = viewModel::setSortAscending,
                             )
-                        }
-                        IconButton(onClick = viewModel::refresh) {
-                            Icon(painterResource(R.drawable.ic_refresh), stringResource(R.string.refresh))
-                        }
-                    },
-                )
-                Breadcrumbs(viewModel.path, viewModel.serverName, onJumpTo)
+                            // The icon shows the view being switched *to*, which is
+                            // what tapping it will do; the description says so in words.
+                            IconButton(onClick = viewModel::toggleLayout) {
+                                Icon(
+                                    painterResource(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view),
+                                    stringResource(
+                                        if (grid) R.string.browser_switch_to_list else R.string.browser_switch_to_grid,
+                                    ),
+                                )
+                            }
+                            IconButton(onClick = viewModel::refresh) {
+                                Icon(painterResource(R.drawable.ic_refresh), stringResource(R.string.refresh))
+                            }
+                        },
+                    )
+                    Breadcrumbs(viewModel.path, viewModel.serverName, onJumpTo)
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -137,17 +161,20 @@ fun BrowserScreen(
                     CenteredMessage(stringResource(R.string.browser_empty))
                 } else {
                     val onClick: (BrowserItem) -> Unit = { item ->
-                        val path = RemotePath.join(viewModel.path, item.name)
-                        when {
-                            item.kind == BrowserItem.Kind.DIRECTORY -> onOpenDirectory(path)
-                            item.playable -> onPlay(path)
-                            else -> scope.launch { snackbar.showSnackbar(unplayable) }
+                        viewModel.onTap(item) {
+                            val path = RemotePath.join(viewModel.path, item.name)
+                            when {
+                                item.kind == BrowserItem.Kind.DIRECTORY -> onOpenDirectory(path)
+                                item.playable -> onPlay(path)
+                                else -> scope.launch { snackbar.showSnackbar(unplayable) }
+                            }
                         }
                     }
+                    val onLongClick: (BrowserItem) -> Unit = viewModel::onLongPress
                     if (grid) {
-                        GridEntries(state.items, viewModel::thumbnailFor, onClick)
+                        GridEntries(state.items, viewModel::thumbnailFor, viewModel.selected, onClick, onLongClick)
                     } else {
-                        ListEntries(state.items, viewModel::thumbnailFor, onClick)
+                        ListEntries(state.items, viewModel::thumbnailFor, viewModel.selected, onClick, onLongClick)
                     }
                 }
             }
@@ -159,20 +186,51 @@ fun BrowserScreen(
 private fun ListEntries(
     items: List<BrowserItem>,
     loadThumbnail: suspend (BrowserItem) -> Bitmap?,
+    selected: Set<String>,
     onClick: (BrowserItem) -> Unit,
+    onLongClick: (BrowserItem) -> Unit,
 ) {
     val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize()) {
         items(items, key = { it.name }) { item ->
+            val isSelected = item.name in selected
             ListItem(
-                modifier = Modifier.clickable { onClick(item) },
+                modifier = Modifier
+                    .combinedClickable(onClick = { onClick(item) }, onLongClick = { onLongClick(item) })
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                    ),
                 leadingContent = {
-                    ThumbnailFrame(item, loadThumbnail, Modifier.size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
+                    // The check sits over the thumbnail rather than replacing it:
+                    // the picture is what tells films apart, and hiding it is
+                    // exactly what you do not want while choosing among them.
+                    Box {
+                        ThumbnailFrame(item, loadThumbnail, Modifier.size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
+                        if (isSelected) SelectedBadge(Modifier.align(Alignment.Center))
+                    }
                 },
                 headlineContent = { Text(item.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
                 supportingContent = item.details(context)?.let { { Text(it) } },
             )
         }
+    }
+}
+
+/** The tick drawn on a selected row or tile. */
+@Composable
+private fun SelectedBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .background(MaterialTheme.colorScheme.primary, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painterResource(R.drawable.ic_check),
+            null,
+            Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
     }
 }
 
@@ -186,7 +244,9 @@ private fun ListEntries(
 private fun GridEntries(
     items: List<BrowserItem>,
     loadThumbnail: suspend (BrowserItem) -> Bitmap?,
+    selected: Set<String>,
     onClick: (BrowserItem) -> Unit,
+    onLongClick: (BrowserItem) -> Unit,
 ) {
     LazyVerticalGrid(
         // Adaptive rather than a fixed count: the same code gives two columns on
@@ -198,18 +258,180 @@ private fun GridEntries(
         modifier = Modifier.fillMaxSize(),
     ) {
         items(items, key = { it.name }) { item ->
-            Column(modifier = Modifier.clickable { onClick(item) }) {
-                ThumbnailFrame(item, loadThumbnail, Modifier.fillMaxWidth().aspectRatio(THUMBNAIL_ASPECT))
+            val isSelected = item.name in selected
+            Column(
+                modifier = Modifier.combinedClickable(
+                    onClick = { onClick(item) },
+                    onLongClick = { onLongClick(item) },
+                ),
+            ) {
+                Box {
+                    ThumbnailFrame(item, loadThumbnail, Modifier.fillMaxWidth().aspectRatio(THUMBNAIL_ASPECT))
+                    if (isSelected) {
+                        SelectedBadge(Modifier.align(Alignment.TopEnd).padding(4.dp))
+                    }
+                }
                 Text(
                     text = item.name,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Unspecified,
                     modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
                 )
             }
         }
     }
+}
+
+/**
+ * The toolbar while items are selected.
+ *
+ * It **replaces** the normal one rather than appearing beside it: with items
+ * checked, refresh, sort and the view toggle act on nothing the user is
+ * looking at, and leaving them there would invite taps that quietly do nothing
+ * to the selection.
+ *
+ * Rename is the one action that only means something for a single item, so it
+ * is the one that can be unavailable — which is where "a menu for one item" and
+ * "act on many" genuinely differ, and the reason one mode can serve both.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectionBar(viewModel: BrowserViewModel) {
+    val single = (viewModel.state as? BrowserViewModel.State.Loaded)
+        ?.items
+        ?.firstOrNull { it.name in viewModel.selected }
+        ?.takeIf { viewModel.selected.size == 1 }
+
+    TopAppBar(
+        title = { Text(stringResource(R.string.selection_count, viewModel.selected.size)) },
+        navigationIcon = {
+            IconButton(onClick = viewModel::clearSelection) {
+                Icon(painterResource(R.drawable.ic_close), stringResource(R.string.selection_close))
+            }
+        },
+        actions = {
+            if (single != null) {
+                IconButton(onClick = { viewModel.startRename(single) }) {
+                    Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.action_rename))
+                }
+            }
+            IconButton(onClick = viewModel::copySelected) {
+                Icon(painterResource(R.drawable.ic_copy), stringResource(R.string.action_copy))
+            }
+            IconButton(onClick = viewModel::cutSelected) {
+                Icon(painterResource(R.drawable.ic_cut), stringResource(R.string.action_cut))
+            }
+            IconButton(onClick = viewModel::askDelete) {
+                Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.action_delete))
+            }
+        },
+    )
+}
+
+@Composable
+private fun RenameDialog(viewModel: BrowserViewModel) {
+    val item = viewModel.renaming ?: return
+    var name by remember(item.name) { mutableStateOf(item.name) }
+
+    AlertDialog(
+        onDismissRequest = viewModel::cancelRename,
+        title = { Text(stringResource(R.string.rename_title)) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.rename_field)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { viewModel.commitRename(name.trim()) },
+                // An empty name is not a name; the server would reject it and
+                // the error would be about the wrong thing.
+                enabled = name.isNotBlank() && name.trim() != item.name,
+            ) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = viewModel::cancelRename) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+@Composable
+private fun DeleteDialog(viewModel: BrowserViewModel) {
+    val prompt = viewModel.deletePrompt ?: return
+    AlertDialog(
+        onDismissRequest = viewModel::cancelDelete,
+        title = { Text(stringResource(R.string.delete_title)) },
+        text = {
+            // The count is the whole point: "delete Series 3" and "delete 47
+            // items" are different decisions, and only one of them is informed.
+            Text(
+                stringResource(
+                    if (prompt.truncated) R.string.delete_body_at_least else R.string.delete_body,
+                    prompt.total,
+                ),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::confirmDelete) { Text(stringResource(R.string.action_delete)) }
+        },
+        dismissButton = {
+            TextButton(onClick = viewModel::cancelDelete) { Text(stringResource(R.string.cancel)) }
+        },
+    )
+}
+
+/**
+ * Progress for the operation in flight.
+ *
+ * Indeterminate: per-item progress would need a callback interface across the
+ * FFI, and a server-side copy of a large film finishes in seconds. A modal
+ * dialog rather than a bar in the toolbar because the operations block the
+ * directory from being used anyway.
+ */
+@Composable
+private fun BusyDialog(operation: BrowserViewModel.Operation?) {
+    val label = when (operation) {
+        null -> return
+        BrowserViewModel.Operation.RENAME -> R.string.busy_rename
+        BrowserViewModel.Operation.DELETE -> R.string.busy_delete
+        BrowserViewModel.Operation.COPY -> R.string.busy_copy
+        BrowserViewModel.Operation.MOVE -> R.string.busy_move
+    }
+    AlertDialog(
+        onDismissRequest = {},
+        confirmButton = {},
+        text = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                CircularProgressIndicator(Modifier.size(24.dp))
+                Text(stringResource(label))
+            }
+        },
+    )
+}
+
+/** Reports what an operation managed, including the parts that did not. */
+@Composable
+private fun ReportSnackbar(viewModel: BrowserViewModel, host: SnackbarHostState) {
+    val report = viewModel.report ?: return
+    val text = report.text()
+    LaunchedEffect(report) {
+        host.showSnackbar(text)
+        viewModel.dismissReport()
+    }
+}
+
+@Composable
+private fun BrowserViewModel.Report.text(): String {
+    val base = stringResource(R.string.report_done, result.succeeded)
+    val failed = if (result.failures.isEmpty()) "" else stringResource(R.string.report_failed, result.failures.size)
+    val conflicts = if (result.conflicts.isEmpty()) "" else stringResource(R.string.report_conflicts, result.conflicts.size)
+    return base + failed + conflicts
 }
 
 /**

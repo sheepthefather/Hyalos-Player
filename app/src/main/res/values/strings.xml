@@ -83,6 +83,28 @@
     <string name="sort_type">类型</string>
     <string name="sort_ascending">升序</string>
     <string name="sort_descending">降序</string>
+
+    <!-- 文件操作 -->
+    <string name="action_rename">重命名</string>
+    <string name="action_delete">删除</string>
+    <string name="action_copy">复制</string>
+    <string name="action_cut">剪切</string>
+    <string name="action_paste">粘贴</string>
+    <string name="selection_count">已选 %1$d 项</string>
+    <string name="selection_close">退出选择</string>
+    <string name="rename_title">重命名</string>
+    <string name="rename_field">新名称</string>
+    <string name="delete_title">确认删除</string>
+    <string name="delete_body">将删除 %1$d 项，其中文件夹内的内容会一并删除。此操作不可撤销。</string>
+    <string name="delete_body_at_least">将删除 %1$d 项以上，其中文件夹内的内容会一并删除。此操作不可撤销。</string>
+    <string name="busy_counting">正在统计…</string>
+    <string name="busy_rename">正在重命名…</string>
+    <string name="busy_delete">正在删除…</string>
+    <string name="busy_copy">正在复制…</string>
+    <string name="busy_move">正在移动…</string>
+    <string name="report_done">已完成 %1$d 项</string>
+    <string name="report_failed">，%1$d 项失败</string>
+    <string name="report_conflicts">，%1$d 项已存在未覆盖</string>
     <string name="browser_root">根目录</string>
     <string name="browser_unplayable">暂不支持播放这种文件</string>
 
