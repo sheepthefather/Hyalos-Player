@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -18,8 +19,10 @@ import com.hyalos.player.playback.PlaybackConnection
 import com.hyalos.player.ui.browser.EntrySorting
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -38,7 +41,29 @@ class PlayerViewModel(
     private val fromPlaylist: Boolean = false,
 ) : ViewModel() {
 
-    val title: String = RemotePath.name(path)
+    private val _title = MutableStateFlow(titleOf(path))
+
+    /**
+     * The film playing **now**.
+     *
+     * Observed from the player rather than taken from the route once. The queue
+     * moves on its own, and a title still naming the film that was tapped would
+     * be wrong for the whole of the next one — which is worse than having no
+     * title at all.
+     */
+    val title: StateFlow<String> = _title.asStateFlow()
+
+    /**
+     * A film's name, without the extension.
+     *
+     * It is a title rather than a file name: ".mkv" says nothing about which
+     * film it is and is the noisiest part of a long name. The folder is left out
+     * for the opposite of the reason the browser's rows show it — there a list
+     * has to tell two folders' worth of episodes apart; here there is one film.
+     */
+    private fun titleOf(remotePath: String): String = RemotePath.name(remotePath)
+        .substringBeforeLast('.')
+        .ifBlank { RemotePath.name(remotePath) }
 
     /** A session of its own; see SessionManager for why playback does not share one. */
     private val connection = PlaybackConnection(
@@ -71,6 +96,17 @@ class PlayerViewModel(
         }
 
     init {
+        // What is playing stops being what was tapped the moment the queue moves
+        // on. Media3 says when that happens; the title follows.
+        player.addListener(
+            object : Player.Listener {
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    val playing = mediaItem?.localConfiguration?.uri?.path ?: return
+                    _title.value = titleOf(playing)
+                }
+            },
+        )
+
         if (path.isNotEmpty()) {
             viewModelScope.launch { extendPlaylist(serverId, path) }
         }

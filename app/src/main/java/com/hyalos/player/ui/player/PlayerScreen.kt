@@ -4,14 +4,19 @@ import android.content.pm.ActivityInfo
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -21,9 +26,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
@@ -55,6 +62,7 @@ import com.hyalos.player.playback.PlaybackErrors
 fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
     val player = viewModel.player
     val videoScale by viewModel.videoScale.collectAsStateWithLifecycle()
+    val title by viewModel.title.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(player.playerError != null) }
 
@@ -108,14 +116,50 @@ fun PlayerScreen(viewModel: PlayerViewModel, onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
         )
 
-        // PlayerView's controller has no back button; show one alongside it.
+        // PlayerView's controller has no back button and no title; both go here,
+        // and both come and go with the controls.
         if (controlsVisible || failed) {
-            IconButton(
-                onClick = onBack,
-                colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                modifier = Modifier.safeDrawingPadding().padding(4.dp),
+            // A scrim first, so it sits under the row. White on a bright frame is
+            // otherwise unreadable — true of an arrow, more so of a title.
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .height(TOP_SCRIM_HEIGHT)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.65f), Color.Transparent),
+                        ),
+                    ),
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .safeDrawingPadding()
+                    .padding(start = 4.dp, end = 16.dp),
             ) {
-                Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
+                IconButton(
+                    onClick = onBack,
+                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                ) {
+                    Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    // Clip, not ellipsis: what an ellipsis would cut off is the
+                    // part that says which episode this is — the end of the name,
+                    // where the episode number usually sits.
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier
+                        .weight(1f)
+                        // Scrolls only when the name does not fit, so a short
+                        // title is simply still.
+                        .basicMarquee(),
+                )
             }
         }
 
@@ -143,6 +187,16 @@ private fun VideoScale.toResizeMode(): Int = when (this) {
     VideoScale.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
     VideoScale.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
 }
+
+/**
+ * How far the scrim behind the back button and the title fades out.
+ *
+ * Fixed rather than measured from the row: the row sits below the display cutout
+ * and the scrim does not, so a height that wraps the row would leave it starting
+ * below the inset and the topmost strip of video unfaded. Generous enough to
+ * cover the row on a device whose inset is large.
+ */
+private val TOP_SCRIM_HEIGHT = 120.dp
 
 @Composable
 private fun Immersive() {
