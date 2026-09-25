@@ -6,12 +6,17 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
+import com.hyalos.player.data.BrowserLayout
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
 import com.hyalos.player.ui.common.UiError
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
@@ -42,6 +47,22 @@ class BrowserViewModel(
     /** For the title and the root breadcrumb. */
     var serverName by mutableStateOf("")
         private set
+
+    /**
+     * Rows or tiles. Follows the stored preference, so the choice survives
+     * leaving the screen and restarting the app.
+     */
+    val layout: StateFlow<BrowserLayout> = container.settings.settings
+        .map { it.browserLayout }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowserLayout.LIST)
+
+    fun toggleLayout() {
+        viewModelScope.launch {
+            container.settings.setBrowserLayout(
+                if (layout.value == BrowserLayout.LIST) BrowserLayout.GRID else BrowserLayout.LIST,
+            )
+        }
+    }
 
     private var job: Job? = null
 

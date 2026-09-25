@@ -74,6 +74,8 @@
 
     <!-- 浏览 -->
     <string name="browser_empty">空文件夹</string>
+    <string name="browser_switch_to_grid">切换到网格视图</string>
+    <string name="browser_switch_to_list">切换到列表视图</string>
     <string name="browser_root">根目录</string>
     <string name="browser_unplayable">暂不支持播放这种文件</string>
 

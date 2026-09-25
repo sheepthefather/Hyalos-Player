@@ -20,6 +20,14 @@ data class AppSettings(
      * thousand of them.
      */
     val thumbnailCacheMb: Int = DEFAULT_THUMBNAIL_CACHE_MB,
+
+    /**
+     * How the file browser lays out a directory.
+     *
+     * Global rather than per-server: it is a preference about how someone likes
+     * to browse, not a property of any one NAS.
+     */
+    val browserLayout: BrowserLayout = BrowserLayout.LIST,
 ) {
     companion object {
         const val DEFAULT_THUMBNAIL_CACHE_MB = 100
@@ -28,3 +36,7 @@ data class AppSettings(
         const val SLIDER_MAX_MB = 1000
     }
 }
+
+/** A directory as rows of text, or as tiles of thumbnails. */
+@Serializable
+enum class BrowserLayout { LIST, GRID }

@@ -16,6 +16,10 @@ class SettingsRepository(private val store: DataStore<AppSettings>) {
         store.updateData { it.copy(thumbnailCacheMb = megabytes) }
     }
 
+    suspend fun setBrowserLayout(layout: BrowserLayout) {
+        store.updateData { it.copy(browserLayout = layout) }
+    }
+
     companion object {
         fun create(context: Context): SettingsRepository = SettingsRepository(
             DataStoreFactory.create(
