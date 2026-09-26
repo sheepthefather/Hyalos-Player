@@ -243,8 +243,11 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
                     Icon(painterResource(R.drawable.ic_copy), stringResource(R.string.action_clipboard))
                 }
                 DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    // With their icons: a menu of bare words reads as a list of
+                    // settings, not as the two things the button above is.
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_copy)) },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_copy), contentDescription = null) },
                         onClick = {
                             open = false
                             viewModel.copySelected()
@@ -252,6 +255,7 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.action_cut)) },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_cut), contentDescription = null) },
                         onClick = {
                             open = false
                             viewModel.cutSelected()
