@@ -225,12 +225,22 @@ private val THUMBNAIL_ASPECT = 16f / 9f
 /**
  * The narrowest a tile may be before the grid drops a column.
  *
- * Sized so a phone held upright shows three across: a 16:9 frame about 2.4 cm
- * wide, which is what a video library wants — big enough to recognise the film,
- * small enough to see a shelf of them at once.
+ * This one number decides how wide a screen must be to show three across:
+ * `Adaptive` asks for `(width - 24 + 12) / (GRID_MIN_CELL + 12)` columns, so the
+ * threshold is `3 * (GRID_MIN_CELL + 12) + 12` — 348dp here, just under the
+ * 360dp that phones are most often designed to.
  *
  * It was 150.dp, on the reasoning that three columns would be "unreadably
- * small". That is true of text and not of thumbnails; at 121dp a frame is still
- * plainly which film it is.
+ * small". That is true of text and not of thumbnails. It was then 110.dp, which
+ * did not actually deliver the three columns it was changed for: 110 puts the
+ * threshold at 378dp, above the commonest phone width there is, so a 360dp phone
+ * still showed two. See ARCHITECTURE.md.
+ *
+ * A tile on a 360dp phone comes out at 104dp — on the 1264x2780, 6.78" screen
+ * this was measured against, a 16:9 frame about 2.0 cm wide: big enough to
+ * recognise the film, small enough to see a shelf of them at once. (The 121dp a
+ * 411dp phone gives is 2.4 cm there; the figure does not carry over, because the
+ * same dp is a different length on a different screen.) The price is one more
+ * column on wide screens, as before: an 800dp tablet goes from six to seven.
  */
-private val GRID_MIN_CELL = 110.dp
+private val GRID_MIN_CELL = 100.dp
