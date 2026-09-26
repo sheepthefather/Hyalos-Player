@@ -207,6 +207,10 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **用 `PlayerView` 而非 Compose 版 `Player`**：后者在 Media3 1.11 仍是 `@ExperimentalApi`，且没有控制条自动隐藏、缓冲指示器与音轨选择——NAS 上的电影常有多条音轨，缺音轨选择直接影响使用。`ExoPlayer` 放在 ViewModel 里，旋转屏幕不重建也不重连。
 
+**控制条布局是抄来的**（`res/layout/player_controller.xml`）。Media3 没有移动中间那组按钮的 API——`controller_layout_id` 是个 **styleable**，`PlayerControlView` 只提供读它的构造参数、没有 setter——所以想改布局只能把 `exo_player_control_view.xml` 复制进来自己改，`player_view.xml` 存在的唯一理由就是把这份布局交给 `PlayerView`。两处改动：`exo_center_controls` 从屏幕中央挪到底部、占满宽度并用底栏同色背景（**id 必须保留**，Media3 靠这个 id 做控制条的淡入淡出；`layout_width` 改成 `match_parent` 是为了让按钮与底栏连成一条，否则白色图标会直接压在画面亮部上）；设置按钮换成 `ic_tune`，因为右上角已经有了应用自己的「播放设置」齿轮，同一块屏幕上的两颗齿轮会被当成同一个控件。代价要记住：Media3 的升级不会再进到这个文件，而 `PlayerControlView` 是按 id 逐个查找控件、**找不到就静默不接线**——改漏一个 id 不会报错，只会有一个按钮没反应。
+
+顺带一条给下次换图标的：控制条上的图标必须**自带颜色**。`ExoStyledControls.Button` 只设 background、scaleType 和 margin，Media3 的样式里没有任何 `android:tint`，所以每个 `exo_styled_controls_*` 自己填 `#FFFFFFFF`。照 Compose 的习惯写成黑色 path，会得到一枚黑底上的黑图标。
+
 **测试**继承 Media3 官方的 `DataSourceContractTest`（22 项契约），内核换成内存里的假 `ReaderSource`——DataSource 依赖接口而非 `Session`，正是为此。
 
 ### 播放器的三个行为

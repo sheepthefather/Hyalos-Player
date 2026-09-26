@@ -1,6 +1,7 @@
 package com.hyalos.player.ui.player
 
 import android.content.pm.ActivityInfo
+import android.view.LayoutInflater
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -105,7 +106,10 @@ fun PlayerScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { context ->
-                PlayerView(context).apply {
+                // Inflated rather than built in code, because the controller
+                // layout is named by a styleable and Media3 exposes no setter for
+                // it. See `player_controller.xml`.
+                (LayoutInflater.from(context).inflate(R.layout.player_view, null) as PlayerView).apply {
                     this.player = player
                     keepScreenOn = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
