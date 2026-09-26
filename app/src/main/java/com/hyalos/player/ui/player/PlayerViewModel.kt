@@ -257,6 +257,28 @@ class PlayerViewModel(
             if (currentlyLandscape) PlaybackOrientation.PORTRAIT else PlaybackOrientation.LANDSCAPE
     }
 
+    /**
+     * Give a finished film something to draw again.
+     *
+     * Covering the player with another screen destroys its composition, and the
+     * surface with it; coming back builds a new one. For a film that is still
+     * going, the decoder is holding the current frame and the new surface draws
+     * it — measured, not assumed. For one that has **finished**, there is no such
+     * frame: the decoder reached the end of the stream and let it go, and a new
+     * surface does not make it produce another. The picture stays black until
+     * something plays, and nothing does.
+     *
+     * A seek makes it decode and draw again. The position to seek to is the
+     * start, because that is where this player is going to play from anyway — a
+     * finished ExoPlayer restarts on `play`. Seeking back from the end also keeps
+     * that true, which the other candidate does not: land a hair *before* the end
+     * and the player no longer counts as finished, so pressing play would play
+     * the last instant and stop, looking like a dead button.
+     */
+    fun redrawIfFinished() {
+        if (player.playbackState == Player.STATE_ENDED) player.seekTo(0)
+    }
+
     /** After an error, try again from where it stopped. */
     fun retry() {
         player.prepare()

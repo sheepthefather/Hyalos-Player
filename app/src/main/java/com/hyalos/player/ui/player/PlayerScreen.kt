@@ -116,6 +116,11 @@ fun PlayerScreen(
         if (activity?.isChangingConfigurations != true) player.pause()
     }
 
+    // This entry stopping is also this entry being covered and rebuilt — the
+    // same round trip that leaves a finished film with a new surface and nothing
+    // to put on it. See `redrawIfFinished`.
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.redrawIfFinished() }
+
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlayerErrorChanged(error: PlaybackException?) {
