@@ -58,6 +58,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 // The controller's ids live in Media3's own R, not the app's: R classes are not
 // transitive, so `R.id.exo_prev` does not exist on ours.
@@ -90,13 +91,54 @@ fun PlayerScreen(
     val title by viewModel.title.collectAsStateWithLifecycle()
     val initialOrientation by viewModel.initialOrientation.collectAsStateWithLifecycle()
     val orientationOverride by viewModel.orientationOverride.collectAsStateWithLifecycle()
-    var controlsVisible by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(player.playerError != null) }
 
     // Held so the countdown below can reach into the view. Nothing else keeps a
     // handle on it: the `AndroidView` factory runs once and hands its result to
     // Compose, which passes it to `update` and nowhere else.
     var controller by remember { mutableStateOf<PlayerView?>(null) }
+
+    /**
+     * How far the controls are showing, 1 down to 0 — the title bar follows it.
+     *
+     * Read off the view rather than listened for, because Media3 hides its
+     * controls by **sliding the bar off the bottom of the screen**: the hide
+     * animator is `ObjectAnimator.ofTranslationY(…, bottomBar)`. Nothing about
+     * the views' visibility changes, and nothing about their alpha, so there is
+     * no event to subscribe to and no property to read — the offset is the
+     * signal, and reading it is the only way to know.
+     *
+     * Both of the visibility listeners were tried first and neither is ever
+     * called on an auto-hide; they do fire when the *user* hides the controls,
+     * which is what made this look intermittent for a while.
+     */
+    var controlsShown by remember { mutableStateOf(true) }
+    LaunchedEffect(controller) {
+        while (true) {
+            // The controller goes **GONE** when Media3 hides it. Measured on the
+            // device rather than taken from the docs: a few seconds into
+            // playback the view reports visibility 8 while the screen shows no
+            // controls at all.
+            //
+            // Read rather than listened for, because the visibility listeners
+            // `PlayerView` offers are never called for an auto-hide — both
+            // overloads were wired up and both logged nothing — so a title bar
+            // waiting on one of them never hides. Watching the property is the
+            // only thing that works.
+            //
+            // Found by class, not by id: the axis of this is a `PlayerControlView`
+            // among the `PlayerView`'s children, and its own id belongs to
+            // Media3 rather than to us.
+            val controlView = controller?.let { view ->
+                (0 until view.childCount)
+                    .map { view.getChildAt(it) }
+                    .filterIsInstance<PlayerControlView>()
+                    .firstOrNull()
+            }
+            controlsShown = controlView?.visibility == View.VISIBLE
+            delay(CONTROLS_TICK_MS)
+        }
+    }
 
     // The remaining-time readout is ours, so no one else refreshes it: Media3
     // binds the time views it knows by id and has never heard of this one. Ticks
@@ -172,11 +214,6 @@ fun PlayerScreen(
                     keepScreenOn = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                     setErrorMessageProvider(PlaybackErrors(context))
-                    setControllerVisibilityListener(
-                        PlayerView.ControllerVisibilityListener { visibility ->
-                            controlsVisible = visibility == android.view.View.VISIBLE
-                        },
-                    )
                     // Our own button in the controller layout. The direction is
                     // read from the context at tap time rather than captured:
                     // this factory runs once, so a captured direction would be
@@ -223,7 +260,7 @@ fun PlayerScreen(
 
         // PlayerView's controller has no back button and no title; both go here,
         // and both come and go with the controls.
-        if (controlsVisible || failed) {
+        if (controlsShown || failed) {
             // A scrim first, so it sits under the row. White on a bright frame is
             // otherwise unreadable — true of an arrow, more so of a title.
             Box(
@@ -358,6 +395,15 @@ private val TOP_BAR_BUTTON_ROOM = 112.dp
  * a pause can look like it did not take.
  */
 private const val REMAINING_TICK_MS = 500L
+
+/**
+ * How often the control bar's slide is read.
+ *
+ * Faster than the countdown above, because this one is watched rather than read:
+ * the slide takes about a fifth of a second, and at half a second the title
+ * would sit there a beat after the bar under it had gone.
+ */
+private const val CONTROLS_TICK_MS = 100L
 
 /**
  * What the file is, and what the player is doing with it.
