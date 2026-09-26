@@ -135,6 +135,39 @@
     <string name="report_done">已完成 %1$d 项</string>
     <string name="report_failed">，%1$d 项失败</string>
     <string name="report_conflicts">，%1$d 项已存在未覆盖</string>
+    <!-- 文件信息。标签短、值由代码拼（数字与 mime 名不进字符串表）。 -->
+    <string name="close">关闭</string>
+    <string name="action_info">信息</string>
+    <string name="info_title">文件信息</string>
+    <string name="info_reading">正在读文件头…</string>
+    <string name="info_failed">读不出这个文件的信息。</string>
+    <string name="info_failed_hint">它可能不是媒体文件，也可能服务器没有响应。文件本身没有被改动。</string>
+    <string name="info_none">无</string>
+    <string name="info_track">轨道</string>
+    <string name="info_section_file">文件</string>
+    <string name="info_section_container">容器</string>
+    <string name="info_section_video">视频</string>
+    <string name="info_section_audio">音频</string>
+    <string name="info_section_subtitle">字幕</string>
+    <string name="info_name">名称</string>
+    <string name="info_server">服务器</string>
+    <string name="info_path">路径</string>
+    <string name="info_size">大小</string>
+    <string name="info_modified">修改时间</string>
+    <string name="info_created">创建时间</string>
+    <string name="info_accessed">访问时间</string>
+    <string name="info_read_only">只读</string>
+    <string name="info_total_bitrate">总码率</string>
+    <string name="info_container">格式</string>
+    <string name="info_duration">时长</string>
+    <string name="info_codec">编码</string>
+    <string name="info_resolution">分辨率</string>
+    <string name="info_frame_rate">帧率</string>
+    <string name="info_bitrate">码率</string>
+    <string name="info_channels">声道数</string>
+    <string name="info_sample_rate">采样率</string>
+    <string name="info_language">语言</string>
+
     <string name="browser_root">根目录</string>
     <string name="browser_unplayable">暂不支持播放这种文件</string>
 

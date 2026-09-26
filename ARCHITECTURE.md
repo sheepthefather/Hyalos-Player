@@ -283,6 +283,14 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **每次操作一条专属会话**（`connectDedicated`）。内核会话串行且超时 20 秒，共用浏览会话会让一次复制把目录列表冻在后面。
 
+**文件信息**（长按单个可播放文件 →「信息」）走的是 `androidx.media3.inspector.MetadataRetriever`：一次拿到每个 track 的 `Format`（编码、分辨率、帧率、声道、采样率、语言、容器）与时长，**不解码、也不建播放器**。选它而不是自己包 `media3-extractor` 的理由很实在——它的 `Builder` 吃一个 `MediaSource.Factory`，而缩略图那套已经在 `KrystallosDataSource` 上建好了 `ProgressiveMediaSource.Factory`，直接复用；自己写 `ExtractorOutput` 收 `Format` 是几百行换同样的结果。两条约束：**这个依赖不是传递的**（`media3-inspector-frame` 不带它，只有 `media3-test-utils` 在 androidTest 里 runtime 依赖），要显式引入；以及它和 `FrameExtractor` 一样**必须从同一个线程构建、使用、关闭**，所以探测自带一条用完即弃的 `HandlerThread`。探测用**专属会话**，理由同文件操作——一次读文件头不该让目录列表排队。
+
+**总码率是估算，所以带着 `≈`。** 容器不写「整个文件多少码率」，只有每条轨道各自声明的（而且常常是 `NO_VALUE`）。界面上的总码率一律是 `文件大小 × 8 ÷ 时长`，用 `≈` 标明；每条轨道那一行则**只在容器确实写了的时候**才出现——把估算值重复到每条轨道上，等于假装它被测量过。
+
+**「读不出来」不是空对话框。** 大小、三个时间、路径这些都来自目录列表，不花一次往返、也永远为真，所以读文件头失败时它们照常显示，失败提示与「重试」加在上面。这也是为什么状态里 `failed` 与 `sections` 并存，而不是一个 `Failed` 状态把内容清空。
+
+**创建时间、访问时间、只读是免费的**——`EntryMetadata` 本来就有这三个字段，一直是 `EntrySorting.DirEntry.toItem()` 把它们丢掉的。**不要**为了显示它们去逐项 `stat`：`DirEntry` 的文档写着那是「让文件浏览器在大量目录下显得坏掉的最快方式」，每项一次往返。
+
 ---
 
 ## 缩略图

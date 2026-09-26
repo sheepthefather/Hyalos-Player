@@ -15,9 +15,14 @@ import com.hyalos.player.files.ClipboardMode
 import com.hyalos.player.files.FileOperations
 import com.hyalos.player.files.OperationResult
 import com.hyalos.player.files.RemoteItem
+import com.hyalos.player.info.InfoSection
+import com.hyalos.player.info.MediaProbe
+import com.hyalos.player.info.ProbedMedia
+import com.hyalos.player.info.infoSections
 import com.hyalos.player.kernel.describesThePath
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
+import com.hyalos.player.thumbnails.ThumbnailSource
 import com.hyalos.player.ui.common.EntryRow
 import com.hyalos.player.ui.common.Selection
 import com.hyalos.player.ui.common.UiError
@@ -145,6 +150,28 @@ class BrowserViewModel(
 
     var deletePrompt by mutableStateOf<DeletePrompt?>(null)
         private set
+
+    /**
+     * What the file-info dialog is showing, or `null` when it is closed.
+     *
+     * [Ready.failed] is not the same as the dialog being empty: the file's own
+     * lines come from the listing and are worth showing either way, so a failed
+     * read still produces sections — it just also says so, and offers to try
+     * again.
+     */
+    sealed interface InfoState {
+        data object Reading : InfoState
+
+        data class Ready(val sections: List<InfoSection>, val failed: Boolean) : InfoState
+    }
+
+    var info by mutableStateOf<InfoState?>(null)
+        private set
+
+    /** The file being described, kept so a retry knows what to read again. */
+    private var infoItem: BrowserItem? = null
+
+    private val probe = MediaProbe(container.appContext)
 
     val clipboard: StateFlow<ClipboardContent?> = container.clipboard.content
 
@@ -304,6 +331,75 @@ class BrowserViewModel(
         report = null
     }
 
+    // ---------------------------------------------------------------------
+    // File info
+    // ---------------------------------------------------------------------
+
+    fun showInfo(item: BrowserItem) {
+        infoItem = item
+        readInfo()
+    }
+
+    fun retryInfo() {
+        if (infoItem != null) readInfo()
+    }
+
+    fun dismissInfo() {
+        infoItem = null
+        info = null
+    }
+
+    private fun readInfo() {
+        val item = infoItem ?: return
+        info = InfoState.Reading
+        viewModelScope.launch {
+            val media = try {
+                probe(item)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The file's own lines are still worth showing, so this is not
+                // an error state — `failed` carries the news instead.
+                null
+            }
+            // The dialog may have been closed, or pointed at another file, while
+            // the header was being read.
+            if (infoItem !== item) return@launch
+            info = InfoState.Ready(
+                sections = infoSections(
+                    item = item,
+                    serverName = serverName,
+                    path = RemotePath.join(path, item.name),
+                    media = media,
+                    formatSize = ::sizeText,
+                    formatDate = ::dateText,
+                ),
+                failed = media == null,
+            )
+        }
+    }
+
+    /**
+     * Read the file's header over a connection of its own.
+     *
+     * `ThumbnailSource` is the project's one implementation of `ReaderSource` —
+     * a reader bound to a server, which reconnects if the session dies and
+     * closes what it opened. Its name is about its first user, not about what it
+     * is; the alternative here would be a second, thinner copy of the same I/O.
+     *
+     * A connection of its own, not the browsing one: kernel sessions run one
+     * operation at a time, and a probe should never be what a directory listing
+     * is waiting behind.
+     */
+    private suspend fun probe(item: BrowserItem): ProbedMedia {
+        val source = ThumbnailSource({ container.sessions.connectDedicated(serverId) }, viewModelScope)
+        return try {
+            probe.probe(source, serverId, RemotePath.join(path, item.name))
+        } finally {
+            source.close()
+        }
+    }
+
     /** Run one operation at a time, reporting whatever it managed to do. */
     private fun run(operation: Operation?, block: suspend () -> OperationResult?) {
         if (busy != null) return
@@ -424,18 +520,21 @@ class BrowserViewModel(
     )
 
     /** "1.4 GB · 2024/3/5", or whichever half is known. */
-    private fun BrowserItem.details(): String? {
-        val context = container.appContext
-        val size = size?.let { Formatter.formatShortFileSize(context, it) }
-        val date = modifiedMs?.let {
-            DateUtils.formatDateTime(
-                context,
-                it,
-                DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_YEAR or DateUtils.FORMAT_NUMERIC_DATE,
-            )
-        }
-        return listOfNotNull(size, date).joinToString(" · ").ifEmpty { null }
-    }
+    private fun BrowserItem.details(): String? =
+        listOfNotNull(size?.let(::sizeText), modifiedMs?.let(::dateText))
+            .joinToString(" · ")
+            .ifEmpty { null }
+
+    /** "1.4 GB". Shared with the info dialog, which shows the same number. */
+    private fun sizeText(bytes: Long): String =
+        Formatter.formatShortFileSize(container.appContext, bytes)
+
+    /** "2024/3/5". Shared with the info dialog. */
+    private fun dateText(millis: Long): String = DateUtils.formatDateTime(
+        container.appContext,
+        millis,
+        DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_YEAR or DateUtils.FORMAT_NUMERIC_DATE,
+    )
 
     private fun load(refresh: Boolean = false) {
         job?.cancel()

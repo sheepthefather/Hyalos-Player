@@ -17,6 +17,11 @@ data class BrowserItem(
     /** `null` for directories, where a size means nothing useful. */
     val size: Long?,
     val modifiedMs: Long?,
+    /** Also `null` where the server keeps no such time; SMB servers vary. */
+    val createdMs: Long? = null,
+    val accessedMs: Long? = null,
+    /** The server's own flag. What it means for the current user is another matter. */
+    val readOnly: Boolean = false,
 ) {
     enum class Kind { DIRECTORY, VIDEO, AUDIO, OTHER }
 
@@ -172,6 +177,12 @@ object EntrySorting {
             kind = kind,
             size = metadata.len.toLong().takeIf { kind != BrowserItem.Kind.DIRECTORY },
             modifiedMs = metadata.modifiedMs?.toLong(),
+            // Carried along because the listing already brought them: they cost
+            // nothing here, whereas asking the server again per file is exactly
+            // the round trip `DirEntry` warns against.
+            createdMs = metadata.createdMs?.toLong(),
+            accessedMs = metadata.accessedMs?.toLong(),
+            readOnly = metadata.readOnly,
         )
     }
 

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  "info": a disc with a lowercase i cut out of it.
+
+  Drawn here rather than copied from Material Symbols like its neighbours,
+  because it is a circle and two rectangles — the shapes are all in the path
+  below — and nothing about it is guesswork. If the official glyph is ever
+  wanted, it is one file to replace.
+
+  `evenOdd` is what cuts the i out: the stem and the dot wind the same way as
+  the disc, so with the default rule they would fill it in rather than punch
+  through it.
+
+  Filled black: the reader is Compose's `Icon`, which tints it. The controller's
+  icons are white for the opposite reason — see `ic_tune.xml`.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <path
+        android:fillColor="#FF000000"
+        android:fillType="evenOdd"
+        android:pathData="M480,80a400,400 0 1,0 0,800a400,400 0 1,0 0,-800zM440,400h80v280h-80zM440,280h80v80h-80z" />
+</vector>
