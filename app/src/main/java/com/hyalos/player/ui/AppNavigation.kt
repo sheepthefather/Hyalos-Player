@@ -1,6 +1,12 @@
 package com.hyalos.player.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
@@ -24,6 +30,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import com.hyalos.player.AppContainer
 import com.hyalos.player.R
@@ -49,6 +56,27 @@ import com.hyalos.player.ui.settings.StorageSettingsViewModel
 
 /** Which half of the app the bottom bar is showing. */
 private enum class Tab { Servers, Playlists }
+
+/**
+ * How long one screen takes to become another, in milliseconds.
+ *
+ * The only number here worth touching. Long enough that the eye reads it as a
+ * change of place rather than a flicker, short enough that a tap feels answered
+ * — the platform's own screen changes sit around here, and Nav3's 700 was three
+ * times that.
+ */
+private const val SCREEN_FADE_MS = 200
+
+/**
+ * The transition itself: both screens dissolve, and nothing moves.
+ *
+ * Deliberately the same shape Nav3 ships, only faster. A slide would say more
+ * about where a screen came from, but it also fights the player, which turns
+ * itself to landscape — a moving picture under a moving transition is two
+ * things to watch at once.
+ */
+private fun AnimatedContentTransitionScope<Scene<NavKey>>.screenFade(): ContentTransform =
+    fadeIn(tween(SCREEN_FADE_MS)) togetherWith fadeOut(tween(SCREEN_FADE_MS))
 
 @Composable
 fun AppNavigation(container: AppContainer) {
@@ -119,6 +147,13 @@ private fun RouteStack(
         // bottom.
         modifier = Modifier.padding(padding).consumeWindowInsets(padding),
         onBack = { backStack.removeLastOrNull() },
+        // Spelled out rather than left to the default, which is a 700 ms
+        // cross-fade in each direction — read out of Nav3's own bytecode
+        // (`sipush 700` on both enter and exit) after the screens felt slow
+        // enough to time. Same shape, a third of the duration: what made it feel
+        // sluggish was the length, not the fade.
+        transitionSpec = { screenFade() },
+        popTransitionSpec = { screenFade() },
         // The ViewModelStore decorator gives every entry its own ViewModels,
         // scoped to its time on the stack. So `viewModel { … }` inside an entry
         // can capture that entry's key directly, and each directory level keeps
