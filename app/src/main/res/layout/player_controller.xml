@@ -87,6 +87,21 @@
 
     </LinearLayout>
 
+    <!-- Ours: how much of the film is left. Media3 has never heard of this id, so
+         nothing refreshes it but Compose — see `RemainingTime.kt` and the ticker
+         in `PlayerScreen`. Shown only upright, where there is no room for
+         Media3's own "position · duration" pair and this is the more useful half
+         of it; laid out exactly like `exo_time` so the two look like one thing. -->
+    <TextView
+        android:id="@+id/player_remaining"
+        style="@style/ExoStyledControls.TimeText.Position"
+        android:layout_gravity="center_vertical|start"
+        android:paddingStart="@dimen/exo_styled_bottom_bar_time_padding"
+        android:paddingEnd="@dimen/exo_styled_bottom_bar_time_padding"
+        android:paddingLeft="@dimen/exo_styled_bottom_bar_time_padding"
+        android:paddingRight="@dimen/exo_styled_bottom_bar_time_padding"
+        android:visibility="gone" />
+
     <!-- The trailing margin on this group and the scroll view below is DEPARTURE
          3's other half: it makes room for the rotate button rather than letting
          Media3's buttons sit under it. One Media3 button's width, because that is

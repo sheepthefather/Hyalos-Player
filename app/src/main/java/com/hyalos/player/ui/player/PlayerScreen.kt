@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
+import android.widget.TextView
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -24,6 +25,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +58,7 @@ import com.hyalos.player.R
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen playback through Media3's `PlayerView`.
@@ -79,6 +82,22 @@ fun PlayerScreen(
     val orientationOverride by viewModel.orientationOverride.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(player.playerError != null) }
+
+    // Held so the countdown below can reach into the view. Nothing else keeps a
+    // handle on it: the `AndroidView` factory runs once and hands its result to
+    // Compose, which passes it to `update` and nowhere else.
+    var controller by remember { mutableStateOf<PlayerView?>(null) }
+
+    // The remaining-time readout is ours, so no one else refreshes it: Media3
+    // binds the time views it knows by id and has never heard of this one. Ticks
+    // only while this screen is composed, which is the only time it is visible.
+    LaunchedEffect(controller) {
+        val label = controller?.findViewById<TextView>(R.id.player_remaining) ?: return@LaunchedEffect
+        while (true) {
+            label.text = remainingText(player.duration, player.currentPosition).orEmpty()
+            delay(REMAINING_TICK_MS)
+        }
+    }
 
     // Where the rotate button would take the picture, which is also what its
     // icon and its description say. Read from the configuration rather than from
@@ -138,6 +157,7 @@ fun PlayerScreen(
                 // layout is named by a styleable and Media3 exposes no setter for
                 // it. See `player_controller.xml`.
                 (LayoutInflater.from(context).inflate(R.layout.player_view, null) as PlayerView).apply {
+                    controller = this
                     this.player = player
                     keepScreenOn = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
@@ -182,6 +202,9 @@ fun PlayerScreen(
                 view.findViewById<View>(Media3R.id.exo_prev)?.visibility = crowd
                 view.findViewById<View>(Media3R.id.exo_next)?.visibility = crowd
                 view.findViewById<View>(Media3R.id.exo_time)?.visibility = crowd
+                // What the time it hides is replaced by, upright.
+                view.findViewById<View>(R.id.player_remaining)?.visibility =
+                    if (portrait) View.VISIBLE else View.GONE
             },
             // Detach so the view does not hold the player past this screen.
             onRelease = { it.player = null },
@@ -291,6 +314,16 @@ private val TOP_BAR_HEIGHT = 56.dp
 
 /** Clearance for the back and settings buttons, so the title never sits under one. */
 private val TOP_BAR_BUTTON_ROOM = 64.dp
+
+/**
+ * How often the remaining-time readout is rewritten.
+ *
+ * Twice a second, against the once Media3 uses for its own time views: those sit
+ * beside a progress bar that is already moving, while this one is the only
+ * thing on a portrait screen that says the film is running, and at once a second
+ * a pause can look like it did not take.
+ */
+private const val REMAINING_TICK_MS = 500L
 
 @Composable
 private fun Immersive() {

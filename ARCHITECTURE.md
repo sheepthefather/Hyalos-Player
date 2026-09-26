@@ -217,6 +217,8 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **竖屏装不下这一行，所以竖屏少放三个东西。** 实测（1080px 宽、密度 2.625）：时间 317px、那组按钮 941px、推子 136px、旋转按钮 136px，合计 1530px 对 1080px；把时间整个去掉、内边距清零仍差 7px。于是竖屏时 `exo_prev`、`exo_next` 与 `exo_time` 设成 `GONE`（在 `AndroidView` 的 `update` 里按方向设），剩 ↺ / 播放暂停 / ↻ 与右端两个图标，约 887px，宽裕。队列本身不受影响——影片照旧连播，只是这两个按钮不画。**这与 Media3 的「最小化模式」不是一回事**：那套按 id 隐藏 `exo_bottom_bar` 等，判据是它自己量出来的宽高，管不到我们新加的按钮。
 
+空出来的那一格没有浪费，放的是**剩余时间**（`-12:34`）：`@id/player_remaining`，同样是竖屏才显示，横屏不显示——那里本来就有完整的「位置 · 时长」，再来一个倒计时是重复。它得自己刷新，Media3 只按 id 绑定它认识的那两个时间 View，这个 id 它从没见过，所以由 `PlayerScreen` 里一个 500ms 的 ticker 写进去（比 Media3 自己的 1 秒快一倍：竖屏下这是屏幕上唯一在动的东西，慢一秒会让人以为暂停没生效）。**负号不是装饰**：它占的是「已播时间」通常所在的位置，只写 `12:34` 会被读成位置，正好说反。格式与边界在 `RemainingTime.kt`，是纯函数，`RemainingTimeTest` 钉着——包括「不足一秒截断而不是进位」和「时长未知时返回 null 而不是 `-0:00`」。
+
 代价要记住：Media3 的升级不会再进到这个文件，而 `PlayerControlView` 是按 id 逐个查找控件、**找不到就静默不接线**——改漏一个 id 不会报错，只会有一个按钮没反应。
 
 顺带一条给下次换图标的：控制条上的图标必须**自带颜色**。`ExoStyledControls.Button` 只设 background、scaleType 和 margin，Media3 的样式里没有任何 `android:tint`，所以每个 `exo_styled_controls_*` 自己填 `#FFFFFFFF`。照 Compose 的习惯写成黑色 path，会得到一枚黑底上的黑图标。
