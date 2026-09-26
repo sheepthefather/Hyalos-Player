@@ -234,11 +234,30 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
                     }
                 }
             }
-            IconButton(onClick = viewModel::copySelected) {
-                Icon(painterResource(R.drawable.ic_copy), stringResource(R.string.action_copy))
-            }
-            IconButton(onClick = viewModel::cutSelected) {
-                Icon(painterResource(R.drawable.ic_cut), stringResource(R.string.action_cut))
+            // Copy and cut are one idea — the clipboard — and one icon's worth of
+            // room. Kept apart they were the last straw for the count beside
+            // them, which wrapped onto two lines.
+            Box {
+                var open by remember { mutableStateOf(false) }
+                IconButton(onClick = { open = true }) {
+                    Icon(painterResource(R.drawable.ic_copy), stringResource(R.string.action_clipboard))
+                }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_copy)) },
+                        onClick = {
+                            open = false
+                            viewModel.copySelected()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_cut)) },
+                        onClick = {
+                            open = false
+                            viewModel.cutSelected()
+                        },
+                    )
+                }
             }
             // Before delete: the one destructive action stays last.
             IconButton(onClick = viewModel::addToPlaylist) {
