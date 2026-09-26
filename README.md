@@ -47,6 +47,17 @@ cd Hyalos-Player
 git submodule update --init --recursive
 ```
 
+### 测试
+
+```bash
+./gradlew test                       # JVM 单测，不需要设备
+./gradlew connectedDebugAndroidTest  # 仪器测试，需要连上设备或模拟器
+```
+
+仪器测试里有 Compose UI 测试（`app/src/androidTest/java/com/hyalos/player/ui/`）。它们按文字与内容描述找控件而不是按坐标，所以改布局不会让它们悄悄点到别的东西上；失败时还会打出语义树。需要数据的用例把 JSON 直接写进 DataStore——应用没有注入假容器的缝。
+
+**CI 只跑 JVM 那一半**，仪器测试要自己记得跑。
+
 ### 同时开发内核时
 
 Gradle 构建的是 submodule 的**工作树**，不是某个提交快照，所以在 `vendor/krystallos` 里改代码（哪怕没提交）下一次构建就会生效。若内核在别处另有一份检出：
