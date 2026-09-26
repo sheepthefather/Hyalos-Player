@@ -1,15 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Material Icons (Rounded) "stay_current_landscape", Apache-2.0.
+  Material Symbols Outlined "stay_current_landscape", Apache-2.0.
 
-  24-unit viewBox rather than the 960 of the other icons in this directory: those
-  come from Material Symbols, this one from Material Icons, and Media3's own
-  controller icons are the latter too — so its proportions match the buttons it
-  sits among better than a Symbols glyph would. No translate group is needed, as
-  this viewBox already starts at zero.
-
-  Filled white, not tinted, for the same reason as `ic_tune`: the reader is
-  Media3's `ImageButton`, whose style carries no `android:tint` at all.
+  Filled white, not tinted, because the reader is Media3's own `ImageButton`
+  rather than Compose's `Icon`. Media3's controller buttons carry no
+  `android:tint` at all — `ExoStyledControls.Button` sets only a background, a
+  scale type and margins — so each icon is responsible for its own colour, and a
+  black one is invisible on the controller's dark scrim. Every
+  `exo_styled_controls_*` drawable is `#FFFFFFFF` for this reason.
 
   Shown when the picture is portrait, i.e. it names where the button will take
   you rather than where you are.
@@ -17,9 +15,12 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M1.01,7L1,17c0,1.1 0.9,2 2,2h18c1.1,0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2H3C1.9,5 1.01,5.9 1.01,7zM19,7v10H5V7h14z" />
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M120-200q-33 0-56.5-23.5T40-280v-400q0-33 23.5-56.5T120-760h720q33 0 56.5 23.5T920-680v400q0 33-23.5 56.5T840-200H120Zm40-80v-400h-40v400h40Zm80 0h480v-400H240v400Zm560 0h40v-400h-40v400ZM160-680h-40 40Zm640 0h40-40Z" />
+    </group>
 </vector>
