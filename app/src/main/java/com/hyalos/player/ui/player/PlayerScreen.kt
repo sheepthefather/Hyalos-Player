@@ -75,6 +75,11 @@ fun PlayerScreen(
 
     // No background playback yet, so leaving the app pauses.
     //
+    // This fires for more than leaving the app: covering the player with another
+    // screen stops this entry's lifecycle too, so tapping the settings gear
+    // pauses the film. Measured, not assumed — the log shows
+    // `playWhenReady=false reason=1` at the moment the settings page opens.
+    //
     // Except when the activity is being rebuilt for a configuration change. The
     // player lives in the ViewModel, which survives that rebuild, so pausing on
     // the way out would pause the *new* screen's player — and since this screen
