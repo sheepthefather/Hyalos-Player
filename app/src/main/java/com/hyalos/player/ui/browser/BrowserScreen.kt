@@ -7,17 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -52,14 +48,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
 import com.hyalos.player.data.BrowserLayout
 import com.hyalos.player.data.SortKey
-import com.hyalos.player.info.InfoRow
-import com.hyalos.player.info.InfoSection
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.ui.common.CenteredMessage
 import com.hyalos.player.ui.common.EntryGrid
 import com.hyalos.player.ui.common.EntryList
 import com.hyalos.player.ui.common.EntryRow
 import com.hyalos.player.ui.common.ErrorState
+import com.hyalos.player.ui.common.InfoDialog
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -91,7 +86,7 @@ fun BrowserScreen(
     // so they survive a refresh that replaces every item.
     RenameDialog(viewModel)
     DeleteDialog(viewModel)
-    InfoDialog(viewModel)
+    BrowserInfoDialog(viewModel)
     BusyDialog(viewModel.busy)
     ReportSnackbar(viewModel, snackbar)
     PlaylistSnackbar(viewModel, snackbar)
@@ -283,85 +278,20 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
  * nothing and are still true, so they are shown with the failure above them and
  * a way to try again.
  */
+/** Named apart from the shared dialog it calls, which it is not a variant of. */
 @Composable
-private fun InfoDialog(viewModel: BrowserViewModel) {
+private fun BrowserInfoDialog(viewModel: BrowserViewModel) {
     val state = viewModel.info ?: return
 
-    AlertDialog(
-        onDismissRequest = viewModel::dismissInfo,
-        title = { Text(stringResource(R.string.info_title)) },
-        text = {
-            when (state) {
-                BrowserViewModel.InfoState.Reading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(Modifier.size(24.dp))
-                    Spacer(Modifier.width(16.dp))
-                    Text(stringResource(R.string.info_reading))
-                }
-
-                is BrowserViewModel.InfoState.Ready -> Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                ) {
-                    if (state.failed) {
-                        Text(
-                            stringResource(R.string.info_failed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Text(
-                            stringResource(R.string.info_failed_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    state.sections.forEach { section -> InfoSectionBlock(section) }
-                }
-            }
-        },
-        confirmButton = {
-            if (state is BrowserViewModel.InfoState.Ready && state.failed) {
-                TextButton(onClick = viewModel::retryInfo) { Text(stringResource(R.string.retry)) }
-            }
-            TextButton(onClick = viewModel::dismissInfo) { Text(stringResource(R.string.close)) }
-        },
+    InfoDialog(
+        title = stringResource(R.string.info_title),
+        onDismiss = viewModel::dismissInfo,
+        sections = (state as? BrowserViewModel.InfoState.Ready)?.sections.orEmpty(),
+        reading = state is BrowserViewModel.InfoState.Reading,
+        failed = (state as? BrowserViewModel.InfoState.Ready)?.failed == true,
+        onRetry = viewModel::retryInfo,
     )
 }
-
-@Composable
-private fun InfoSectionBlock(section: InfoSection) {
-    Text(
-        stringResource(section.title),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
-    )
-    // An empty group means there is nothing of that kind — no audio track, no
-    // subtitles — which is worth a line of its own.
-    if (section.rows.isEmpty()) {
-        InfoLine(InfoRow(R.string.info_track, stringResource(R.string.info_none)))
-        return
-    }
-    section.rows.forEach { InfoLine(it) }
-}
-
-/** Label in a fixed column, value wrapping beside it. */
-@Composable
-private fun InfoLine(row: InfoRow) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-        Text(
-            stringResource(row.label),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(INFO_LABEL_WIDTH),
-        )
-        // A null value means the label is the whole statement — see `InfoRow`.
-        row.value?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-/** Wide enough for the longest label ("修改时间"), narrow enough for the values. */
-private val INFO_LABEL_WIDTH = 76.dp
 
 @Composable
 private fun RenameDialog(viewModel: BrowserViewModel) {

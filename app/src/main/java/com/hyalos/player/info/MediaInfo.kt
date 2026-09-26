@@ -44,6 +44,8 @@ internal fun infoSections(
     media: ProbedMedia?,
     formatSize: (Long) -> String,
     formatDate: (Long) -> String,
+    /** Only known while something is playing; null in the browser. */
+    decode: DecodeFacts? = null,
 ): List<InfoSection> {
     val sections = mutableListOf(
         InfoSection(
@@ -87,7 +89,40 @@ internal fun infoSections(
         }
     }
 
+    if (decode != null) {
+        sections += InfoSection(R.string.info_section_decode, decode.rows())
+    }
+
     return sections
+}
+
+/**
+ * What the player is doing, as opposed to what the file contains.
+ *
+ * The decoder's name and how it works are two rows rather than one: this
+ * dialog's values are strings the file reported — names, numbers, mime types —
+ * and "hardware" is a word from the string table, which a value cannot be. The
+ * word stands alone under the decoder it describes, the way "read-only" does in
+ * the file section.
+ */
+private fun DecodeFacts.rows(): List<InfoRow> = buildList {
+    for ((label, decoder) in listOf(R.string.info_video_decoder to video, R.string.info_audio_decoder to audio)) {
+        decoder ?: continue
+        add(InfoRow(label, decoder.name))
+        // Nothing when the name could not be placed — see `DecoderFact`.
+        decoder.how()?.let { add(InfoRow(it, null)) }
+    }
+    // Shown even at zero: "nothing was dropped" is an answer, and the row's
+    // absence would read as the counter being unavailable.
+    droppedFrames?.let { add(InfoRow(R.string.info_dropped_frames, it.toString())) }
+}
+
+/** The word for how a decoder works, or nothing when we could not place it. */
+@StringRes
+private fun DecoderFact.how(): Int? = when (hardware) {
+    true -> R.string.info_decoder_hardware
+    false -> R.string.info_decoder_software
+    null -> null
 }
 
 private val TRACK_SECTIONS = listOf(
@@ -119,6 +154,10 @@ private fun TrackInfo.rows(): List<InfoRow> = buildList {
     language?.takeIf { it.isNotBlank() && it != "und" }?.let {
         add(InfoRow(R.string.info_language, it))
     }
+    // Only when this device says it cannot play it, which is the answer to "why
+    // is there no sound" — and saying "supported" on every line is noise. Null
+    // in the browser, where nothing has asked the device yet.
+    if (supported == false) add(InfoRow(R.string.info_track_unsupported, null))
 }
 
 /** Bytes over seconds, in bits per second. Null when either is missing. */

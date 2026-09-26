@@ -151,6 +151,14 @@
     <string name="info_section_video">视频</string>
     <string name="info_section_audio">音频</string>
     <string name="info_section_subtitle">字幕</string>
+    <string name="info_section_decode">解码</string>
+    <string name="info_video_decoder">视频解码器</string>
+    <string name="info_audio_decoder">音频解码器</string>
+    <!-- 单独一行，紧跟它所描述的那个解码器；和「只读」同样的写法。 -->
+    <string name="info_decoder_hardware">硬件解码</string>
+    <string name="info_decoder_software">软件解码</string>
+    <string name="info_dropped_frames">丢帧数</string>
+    <string name="info_track_unsupported">设备不支持这条轨道</string>
     <string name="info_name">名称</string>
     <string name="info_server">服务器</string>
     <string name="info_path">路径</string>
@@ -196,6 +204,8 @@
     <string name="player_error_decoder">设备无法解码这个文件</string>
     <string name="player_error_generic">播放失败</string>
     <string name="player_settings">播放设置</string>
+    <!-- 顶栏的第二个图标：这个文件是什么、播放器正在怎么放它。 -->
+    <string name="player_info">视频信息</string>
     <!-- The controller's own menu: playback speed, audio track, subtitles. -->
     <string name="player_options">播放选项</string>
     <!-- Names the direction the button turns *to*, matching its icon. -->

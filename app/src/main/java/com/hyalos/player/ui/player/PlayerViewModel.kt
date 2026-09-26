@@ -1,23 +1,37 @@
 package com.hyalos.player.ui.player
 
 import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DecoderReuseEvaluation
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
+import com.hyalos.player.info.DecodeFacts
+import com.hyalos.player.info.InfoSection
+import com.hyalos.player.info.decoderFact
+import com.hyalos.player.info.infoSections
+import com.hyalos.player.info.toProbedMedia
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.playback.KrystallosDataSource
 import com.hyalos.player.playback.KrystallosUri
 import com.hyalos.player.playback.PlaybackConnection
+import com.hyalos.player.ui.browser.BrowserItem
 import com.hyalos.player.ui.browser.EntrySorting
+import com.hyalos.player.ui.common.dateText
+import com.hyalos.player.ui.common.sizeText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,7 +111,80 @@ class PlayerViewModel(
             prepare()
         }
 
+    // ---------------------------------------------------------------------
+    // What the player is doing
+    // ---------------------------------------------------------------------
+    //
+    // Declared above `init` because Kotlin initialises in declaration order and
+    // `init` attaches the listener below.
+
+    /** The server's display name, read once — the info dialog names it. */
+    private var serverName = ""
+
+    /**
+     * The file actually playing, which is not the one that was tapped once the
+     * queue moves on. The info dialog describes *this* file — name, path and
+     * tracks all have to be about the same one, and the tracks come from the
+     * player, so they follow the queue.
+     */
+    private var playingPath = path
+
+    /**
+     * The decoders the player opened, caught as the callbacks arrive.
+     *
+     * **There is no way to ask.** Media3 reports the decoder only through
+     * `AnalyticsListener`, and only at the moment it is initialised — the
+     * player has no `getCurrentDecoder()` — so the names have to be kept as they
+     * go past. The mime type comes from the format callbacks instead, which the
+     * decoder callbacks do not carry.
+     */
+    private var videoDecoderName: String? = null
+    private var audioDecoderName: String? = null
+    private var videoMimeType: String? = null
+    private var audioMimeType: String? = null
+
+    private val decoderWatcher = object : AnalyticsListener {
+        override fun onVideoDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            videoDecoderName = decoderName
+        }
+
+        override fun onAudioDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            initializedTimestampMs: Long,
+            initializationDurationMs: Long,
+        ) {
+            audioDecoderName = decoderName
+        }
+
+        override fun onVideoInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: DecoderReuseEvaluation?,
+        ) {
+            videoMimeType = format.sampleMimeType
+        }
+
+        override fun onAudioInputFormatChanged(
+            eventTime: AnalyticsListener.EventTime,
+            format: Format,
+            decoderReuseEvaluation: DecoderReuseEvaluation?,
+        ) {
+            audioMimeType = format.sampleMimeType
+        }
+    }
+
     init {
+        // From the start, not when the dialog opens: the decoder is initialised
+        // once, at the beginning, and says nothing again.
+        player.addAnalyticsListener(decoderWatcher)
+        viewModelScope.launch { serverName = container.servers.get(serverId)?.name.orEmpty() }
+
         // What is playing stops being what was tapped the moment the queue moves
         // on. Media3 says when that happens; the title follows.
         player.addListener(
@@ -105,6 +192,7 @@ class PlayerViewModel(
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     val playing = mediaItem?.localConfiguration?.uri?.path ?: return
                     _title.value = titleOf(playing)
+                    playingPath = playing
                 }
             },
         )
@@ -257,6 +345,54 @@ class PlayerViewModel(
             if (currentlyLandscape) PlaybackOrientation.PORTRAIT else PlaybackOrientation.LANDSCAPE
     }
 
+    /** The rows of the info dialog, or `null` when it is closed. */
+    var info by mutableStateOf<List<InfoSection>?>(null)
+        private set
+
+    /**
+     * Pause, and lay out what the file and the player between them know.
+     *
+     * Paused on purpose, and **left** paused when it closes — the same rule as
+     * opening the playback settings. Two ways to pause and only one of them
+     * resuming would be a rule nobody could remember.
+     *
+     * Tracks come from the running player rather than a second probe of the
+     * file: no round trip, and it describes what is actually playing — including
+     * whether this device can handle each track, which a file cannot say.
+     */
+    fun showInfo() {
+        player.pause()
+        val durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0 }
+        val tracks = player.currentTracks.takeIf { player.isCommandAvailable(Player.COMMAND_GET_TRACKS) }
+        info = infoSections(
+            // Only the name is known here: the player route carries a server and
+            // a path, not a size or timestamps, and a round trip for two lines
+            // nobody opened this dialog for is not worth it. The name keeps its
+            // extension, as the browser's does — unlike the title above, which
+            // drops it for the screen.
+            item = BrowserItem(
+                name = RemotePath.name(playingPath),
+                kind = BrowserItem.Kind.VIDEO,
+                size = null,
+                modifiedMs = null,
+            ),
+            serverName = serverName,
+            path = playingPath,
+            media = tracks?.toProbedMedia(durationMs),
+            formatSize = { sizeText(container.appContext, it) },
+            formatDate = { dateText(container.appContext, it) },
+            decode = DecodeFacts(
+                video = decoderFact(videoDecoderName, videoMimeType),
+                audio = decoderFact(audioDecoderName, audioMimeType),
+                droppedFrames = player.videoDecoderCounters?.droppedBufferCount,
+            ),
+        )
+    }
+
+    fun dismissInfo() {
+        info = null
+    }
+
     /**
      * Give a finished film something to draw again.
      *
@@ -285,6 +421,9 @@ class PlayerViewModel(
     }
 
     override fun onCleared() {
+        // Removal wants the very same instance — Media3 keys on identity — which
+        // is why the listener is a field and not built inline in `init`.
+        player.removeAnalyticsListener(decoderWatcher)
         // The player first: releasing it interrupts the loader thread, so
         // nothing starts a new read on the connection while it is closing. A
         // read already inside the kernel runs on to its timeout — cancellation

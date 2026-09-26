@@ -26,6 +26,8 @@ import com.hyalos.player.playback.ServerReaderSource
 import com.hyalos.player.ui.common.EntryRow
 import com.hyalos.player.ui.common.Selection
 import com.hyalos.player.ui.common.UiError
+import com.hyalos.player.ui.common.dateText
+import com.hyalos.player.ui.common.sizeText
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -371,8 +373,8 @@ class BrowserViewModel(
                     serverName = serverName,
                     path = RemotePath.join(path, item.name),
                     media = media,
-                    formatSize = ::sizeText,
-                    formatDate = ::dateText,
+                    formatSize = { sizeText(container.appContext, it) },
+                    formatDate = { dateText(container.appContext, it) },
                 ),
                 failed = media == null,
             )
@@ -522,20 +524,13 @@ class BrowserViewModel(
 
     /** "1.4 GB · 2024/3/5", or whichever half is known. */
     private fun BrowserItem.details(): String? =
-        listOfNotNull(size?.let(::sizeText), modifiedMs?.let(::dateText))
+        listOfNotNull(
+            size?.let { sizeText(container.appContext, it) },
+            modifiedMs?.let { dateText(container.appContext, it) },
+        )
             .joinToString(" · ")
             .ifEmpty { null }
 
-    /** "1.4 GB". Shared with the info dialog, which shows the same number. */
-    private fun sizeText(bytes: Long): String =
-        Formatter.formatShortFileSize(container.appContext, bytes)
-
-    /** "2024/3/5". Shared with the info dialog. */
-    private fun dateText(millis: Long): String = DateUtils.formatDateTime(
-        container.appContext,
-        millis,
-        DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_YEAR or DateUtils.FORMAT_NUMERIC_DATE,
-    )
 
     private fun load(refresh: Boolean = false) {
         job?.cancel()

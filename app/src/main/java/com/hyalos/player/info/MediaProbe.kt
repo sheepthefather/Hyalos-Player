@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.TrackGroupArray
@@ -33,6 +34,12 @@ data class TrackInfo(
     val channelCount: Int?,
     val sampleRate: Int?,
     val language: String?,
+    /**
+     * Whether this device says it can play the track. Null when the answer came
+     * from the file rather than from the player, which is the only place that
+     * knows — a file cannot tell you what will happen on this phone.
+     */
+    val supported: Boolean? = null,
 ) {
     enum class Kind { VIDEO, AUDIO, TEXT, OTHER }
 }
@@ -128,7 +135,29 @@ private fun TrackGroupArray.toProbedMedia(durationMs: Long?): ProbedMedia {
     return ProbedMedia(containerMimeType = container, durationMs = durationMs, tracks = tracks)
 }
 
-private fun Format.toTrackInfo(type: Int) = TrackInfo(
+/**
+ * What the **player** reports about the stream it has open.
+ *
+ * Preferred over probing the file again while something is playing: it costs no
+ * round trip, and it describes what is actually being played — including
+ * whether *this* device can handle each track, which the file cannot say.
+ */
+@OptIn(UnstableApi::class)
+internal fun Tracks.toProbedMedia(durationMs: Long?): ProbedMedia {
+    var container: String? = null
+    val tracks = ArrayList<TrackInfo>(groups.size)
+    for (group in groups) {
+        val format = group.getTrackFormat(0)
+        if (container == null) container = format.containerMimeType
+        tracks += format.toTrackInfo(
+            type = group.type,
+            supported = group.getTrackSupport(0) == C.FORMAT_HANDLED,
+        )
+    }
+    return ProbedMedia(containerMimeType = container, durationMs = durationMs, tracks = tracks)
+}
+
+private fun Format.toTrackInfo(type: Int, supported: Boolean? = null) = TrackInfo(
     kind = when (type) {
         C.TRACK_TYPE_VIDEO -> TrackInfo.Kind.VIDEO
         C.TRACK_TYPE_AUDIO -> TrackInfo.Kind.AUDIO
@@ -146,4 +175,5 @@ private fun Format.toTrackInfo(type: Int) = TrackInfo(
     channelCount = channelCount.takeIf { it > 0 },
     sampleRate = sampleRate.takeIf { it > 0 },
     language = language,
+    supported = supported,
 )

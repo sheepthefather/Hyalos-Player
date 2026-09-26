@@ -23,6 +23,7 @@ class MediaInfoTest {
         sampleRate: Int? = null,
         language: String? = null,
         kind: TrackInfo.Kind = TrackInfo.Kind.VIDEO,
+        supported: Boolean? = null,
     ) = TrackInfo(
         kind = kind,
         mimeType = mimeType,
@@ -34,11 +35,13 @@ class MediaInfoTest {
         channelCount = channelCount,
         sampleRate = sampleRate,
         language = language,
+        supported = supported,
     )
 
     private fun sections(
         item: BrowserItem,
         media: ProbedMedia?,
+        decode: DecodeFacts? = null,
     ) = infoSections(
         item = item,
         serverName = "TestNAS",
@@ -46,6 +49,7 @@ class MediaInfoTest {
         media = media,
         formatSize = size,
         formatDate = date,
+        decode = decode,
     )
 
     private fun List<InfoSection>.rows(title: Int) = first { it.title == title }.rows
@@ -148,6 +152,83 @@ class MediaInfoTest {
 
         val eng = sections(Film, ProbedMedia(null, null, listOf(videoTrack(kind = TrackInfo.Kind.AUDIO, language = "eng"))))
         assertEquals("eng", eng.rows(R.string.info_section_audio).value(R.string.info_language))
+    }
+
+    @Test
+    fun `the browser has no decoder section, because nothing has been opened yet`() {
+        // Not merely empty: the question does not apply until something plays.
+        assertTrue(sections(Film, ProbedMedia(null, null, emptyList())).none { it.title == R.string.info_section_decode })
+    }
+
+    @Test
+    fun `a decoder says what it is, and how it works on a line of its own`() {
+        val rows = sections(
+            Film,
+            ProbedMedia(null, null, emptyList()),
+            decode = DecodeFacts(
+                video = DecoderFact("c2.android.vp8.decoder", hardware = false),
+                audio = DecoderFact("c2.android.mp4a.decoder", hardware = true),
+                droppedFrames = null,
+            ),
+        ).rows(R.string.info_section_decode)
+
+        assertEquals("c2.android.vp8.decoder", rows.value(R.string.info_video_decoder))
+        assertEquals("c2.android.mp4a.decoder", rows.value(R.string.info_audio_decoder))
+        // The whole order, because the point is that each word sits directly
+        // under the decoder it describes — the same shape as "read-only" in the
+        // file section, and the reason it is a row of its own.
+        assertEquals(
+            listOf(
+                R.string.info_video_decoder,
+                R.string.info_decoder_software,
+                R.string.info_audio_decoder,
+                R.string.info_decoder_hardware,
+            ),
+            rows.labels(),
+        )
+    }
+
+    @Test
+    fun `a decoder we cannot place keeps its name and drops the claim`() {
+        val rows = sections(
+            Film,
+            ProbedMedia(null, null, emptyList()),
+            decode = DecodeFacts(video = DecoderFact("vendor.mystery.decoder", hardware = null), audio = null, droppedFrames = null),
+        ).rows(R.string.info_section_decode)
+
+        assertEquals("vendor.mystery.decoder", rows.value(R.string.info_video_decoder))
+        assertNull(rows.value(R.string.info_decoder_hardware))
+        assertNull(rows.value(R.string.info_decoder_software))
+        assertNull("no audio decoder was reported", rows.value(R.string.info_audio_decoder))
+    }
+
+    @Test
+    fun `no dropped frames is an answer, not an absence`() {
+        val rows = sections(
+            Film,
+            ProbedMedia(null, null, emptyList()),
+            decode = DecodeFacts(video = null, audio = null, droppedFrames = 0),
+        ).rows(R.string.info_section_decode)
+
+        assertEquals("0", rows.value(R.string.info_dropped_frames))
+        assertNull(
+            "a player that cannot count should say nothing",
+            sections(Film, ProbedMedia(null, null, emptyList()), decode = DecodeFacts(null, null, null))
+                .rows(R.string.info_section_decode).value(R.string.info_dropped_frames),
+        )
+    }
+
+    @Test
+    fun `a track this device cannot play says so, and a playable one says nothing`() {
+        val unsupported = sections(Film, ProbedMedia(null, null, listOf(videoTrack(supported = false))))
+        assertTrue(R.string.info_track_unsupported in unsupported.rows(R.string.info_section_video).labels())
+
+        val supported = sections(Film, ProbedMedia(null, null, listOf(videoTrack(supported = true))))
+        assertTrue(R.string.info_track_unsupported !in supported.rows(R.string.info_section_video).labels())
+
+        // From the file alone nothing has asked the device, so nothing is claimed.
+        val fromFile = sections(Film, ProbedMedia(null, null, listOf(videoTrack(supported = null))))
+        assertTrue(R.string.info_track_unsupported !in fromFile.rows(R.string.info_section_video).labels())
     }
 
     @Test

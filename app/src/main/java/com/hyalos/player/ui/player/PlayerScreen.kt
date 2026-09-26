@@ -58,6 +58,7 @@ import com.hyalos.player.R
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
+import com.hyalos.player.ui.common.InfoDialog
 import kotlinx.coroutines.delay
 
 /**
@@ -115,6 +116,7 @@ fun PlayerScreen(
 
     Immersive()
     PlayerOrientation(orientationOverride ?: initialOrientation)
+    PlayerInfoDialog(viewModel)
 
     // No background playback yet, so leaving the app pauses.
     //
@@ -246,12 +248,25 @@ fun PlayerScreen(
                 ) {
                     Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
                 }
-                IconButton(
-                    onClick = onOpenSettings,
-                    colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                // Two on the right, so a row rather than a single button — and
+                // the title's clearance is measured from the wider side, or it
+                // would sit under one of them.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp),
                 ) {
-                    Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.player_settings))
+                    IconButton(
+                        onClick = viewModel::showInfo,
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    ) {
+                        Icon(painterResource(R.drawable.ic_info), stringResource(R.string.player_info))
+                    }
+                    IconButton(
+                        onClick = onOpenSettings,
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    ) {
+                        Icon(painterResource(R.drawable.ic_settings), stringResource(R.string.player_settings))
+                    }
                 }
                 Text(
                     text = title,
@@ -264,9 +279,10 @@ fun PlayerScreen(
                     overflow = TextOverflow.Clip,
                     modifier = Modifier
                         .align(Alignment.Center)
-                        // Room for the two buttons, equal on both sides so the
-                        // title is centred on the screen rather than in whatever
-                        // space the buttons happen to leave.
+                        // Room for the buttons, equal on both sides so the title
+                        // is centred on the screen rather than in whatever space
+                        // the buttons happen to leave. Sized for the right, which
+                        // has two of them.
                         .padding(horizontal = TOP_BAR_BUTTON_ROOM)
                         // Scrolls only when the name does not fit, so a short
                         // title is simply still.
@@ -312,8 +328,13 @@ private val TOP_SCRIM_HEIGHT = 120.dp
 
 private val TOP_BAR_HEIGHT = 56.dp
 
-/** Clearance for the back and settings buttons, so the title never sits under one. */
-private val TOP_BAR_BUTTON_ROOM = 64.dp
+/**
+ * Clearance for the buttons either side of the title, so it never sits under
+ * one. Two 48dp buttons plus the row's own padding, on the side that has two:
+ * the padding is symmetric, so this is what keeps the title centred on the
+ * screen rather than on the gap between unequal ends.
+ */
+private val TOP_BAR_BUTTON_ROOM = 112.dp
 
 /**
  * How often the remaining-time readout is rewritten.
@@ -324,6 +345,22 @@ private val TOP_BAR_BUTTON_ROOM = 64.dp
  * a pause can look like it did not take.
  */
 private const val REMAINING_TICK_MS = 500L
+
+/**
+ * What the file is, and what the player is doing with it.
+ *
+ * The rows were laid out once, when the dialog was opened — and the film was
+ * paused then, deliberately. Nothing here is live, so nothing re-reads it.
+ */
+@Composable
+private fun PlayerInfoDialog(viewModel: PlayerViewModel) {
+    val sections = viewModel.info ?: return
+    InfoDialog(
+        title = stringResource(R.string.player_info),
+        onDismiss = viewModel::dismissInfo,
+        sections = sections,
+    )
+}
 
 @Composable
 private fun Immersive() {

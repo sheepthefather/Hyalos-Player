@@ -293,6 +293,18 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **创建时间、访问时间、只读是免费的**——`EntryMetadata` 本来就有这三个字段，一直是 `EntrySorting.DirEntry.toItem()` 把它们丢掉的。**不要**为了显示它们去逐项 `stat`：`DirEntry` 的文档写着那是「让文件浏览器在大量目录下显得坏掉的最快方式」，每项一次往返。
 
+### 播放器里的「视频信息」
+
+顶栏第二个图标，用的是同一套排版（`ui/common/InfoDialog.kt`），但**问的是另一个问题**：浏览器那份说「这个文件是什么」，这份说「播放器正在怎么放它」。所以数据来源不同——轨道取自**正在跑的播放器**（`player.getCurrentTracks()` → `Group.getTrackFormat(i)`），不重新探一次文件：省一次往返，而且它描述的是**实际在播的那条流**，还包括「这台设备能不能解这条轨道」（`Group.getTrackSupport(i)`，文件自己答不了这个）。另加一组「解码」。
+
+**解码器名字只能靠回调拿。** Media3 没有任何同步查询 API——没有 `getCurrentDecoder()`——名字只在 `AnalyticsListener.onVideoDecoderInitialized` 里出现一次，所以必须在 ViewModel 里挂 listener、一路缓存；mime 另从 `onVideoInputFormatChanged` 取，解码器回调不带它。listener 在构造时就挂上（解码器只在开头初始化一次），且**移除必须传同一个实例**（Media3 按身份认），所以它是字段而不是 inline 对象。
+
+**软/硬解不要自己判前缀。** `MediaCodecInfo.hardwareAccelerated` 就是平台 `isHardwareAccelerated()`（API 29+）的封装，而 **API<29 时 Media3 自己回退到前缀判断**（`c2.android.`/`omx.google.`/`omx.ffmpeg.`/`omx.sec.*.sw.` → 软件，`arc.` → 硬，音频一律软件）。自己再写一套既是重复它的代码，又会跟它不一致。做法是按名字在 `MediaCodecUtil.getDecoderInfos(mime, false, false)` 里匹配；**匹配不到就只显示名字、不标软硬**——和「认不出的 mime 原样显示」同一条规矩。实测：模拟器上显示 `c2.android.avc.decoder` + 软件解码，与那条模拟器约束（`-feature -HardwareDecoder`）正好对上。
+
+**信息描述的必须是「正在播的那个文件」，不是「当初点的那个」。** 这条踩过：对话框里「名称」取自跟随队列的标题、「路径」取自路由参数，于是自动连播切集之后两个字段描述的是**不同文件**（名称是下一集、路径是上一集）。现在都从 `playingPath` 来——它在 `onMediaItemTransition` 里更新，与标题同源。名称还要**带扩展名**：标题为屏幕好看会去掉它，信息里去掉就与路径对不上了。
+
+**打开即暂停，关掉保持暂停**——与「进播放设置就暂停」同一条规则。两条暂停规则里一条会自动恢复、另一条不会，是没人记得住的东西。轨道与解码是打开那一刻的快照：影片此时暂停，没有活的东西需要刷新。
+
 ---
 
 ## 缩略图
