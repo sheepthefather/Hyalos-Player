@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.hyalos.player.kernel.shutdown
-import com.hyalos.player.thumbnails.ThumbnailSource
+import com.hyalos.player.playback.ServerReaderSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,7 +48,7 @@ class MediaProbeTest {
     private lateinit var session: Session
 
     /** The id is decoration: `KrystallosDataSource` addresses files by path alone. */
-    private lateinit var source: ThumbnailSource
+    private lateinit var source: ServerReaderSource
 
     @Before
     fun connect() = runBlocking {
@@ -62,7 +62,7 @@ class MediaProbeTest {
                 smbSeal = false,
             ),
         )
-        source = ThumbnailSource({ session }, scope)
+        source = ServerReaderSource({ session }, scope)
     }
 
     @After

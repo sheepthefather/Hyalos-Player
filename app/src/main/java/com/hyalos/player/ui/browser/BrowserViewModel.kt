@@ -22,7 +22,7 @@ import com.hyalos.player.info.infoSections
 import com.hyalos.player.kernel.describesThePath
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
-import com.hyalos.player.thumbnails.ThumbnailSource
+import com.hyalos.player.playback.ServerReaderSource
 import com.hyalos.player.ui.common.EntryRow
 import com.hyalos.player.ui.common.Selection
 import com.hyalos.player.ui.common.UiError
@@ -382,17 +382,18 @@ class BrowserViewModel(
     /**
      * Read the file's header over a connection of its own.
      *
-     * `ThumbnailSource` is the project's one implementation of `ReaderSource` —
-     * a reader bound to a server, which reconnects if the session dies and
-     * closes what it opened. Its name is about its first user, not about what it
-     * is; the alternative here would be a second, thinner copy of the same I/O.
+     * `ServerReaderSource` is the project's implementation of `ReaderSource` for
+     * one server: it keeps the session, holds at most one file open, and
+     * reconnects when the session dies. The thumbnails keep one per server for
+     * the life of the app; a probe builds one for itself and closes it after,
+     * because a probe is a single read and will never want the session again.
      *
      * A connection of its own, not the browsing one: kernel sessions run one
      * operation at a time, and a probe should never be what a directory listing
      * is waiting behind.
      */
     private suspend fun probe(item: BrowserItem): ProbedMedia {
-        val source = ThumbnailSource({ container.sessions.connectDedicated(serverId) }, viewModelScope)
+        val source = ServerReaderSource({ container.sessions.connectDedicated(serverId) }, viewModelScope)
         return try {
             probe.probe(source, serverId, RemotePath.join(path, item.name))
         } finally {
