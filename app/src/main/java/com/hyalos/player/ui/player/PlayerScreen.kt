@@ -6,15 +6,22 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
@@ -32,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -58,7 +66,8 @@ import com.hyalos.player.R
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
-import com.hyalos.player.ui.common.InfoDialog
+import com.hyalos.player.ui.common.InfoColors
+import com.hyalos.player.ui.common.InfoSectionList
 import kotlinx.coroutines.delay
 
 /**
@@ -116,7 +125,6 @@ fun PlayerScreen(
 
     Immersive()
     PlayerOrientation(orientationOverride ?: initialOrientation)
-    PlayerInfoDialog(viewModel)
 
     // No background playback yet, so leaving the app pauses.
     //
@@ -299,6 +307,11 @@ fun PlayerScreen(
                 Text(stringResource(R.string.retry))
             }
         }
+
+        // Last in the box, so it is over everything: the picture, the control
+        // bar and the title bar. Drawn before the `AndroidView` it would be
+        // behind the surface and never seen at all.
+        PlayerInfoOverlay(viewModel)
     }
 }
 
@@ -349,18 +362,82 @@ private const val REMAINING_TICK_MS = 500L
 /**
  * What the file is, and what the player is doing with it.
  *
- * The rows were laid out once, when the dialog was opened — and the film was
+ * On a scrim rather than in a themed dialog: a light Material surface in the
+ * middle of a film is a different app for a moment, and this is the player's own
+ * furniture — white on black, like the control bar underneath it.
+ *
+ * Dismissed by a tap anywhere, or by back. No button and no hint: tapping the
+ * picture to make what is over it go away is the one gesture every player
+ * already has, and back is the second.
+ *
+ * The rows were laid out once, when the sheet was opened — and the film was
  * paused then, deliberately. Nothing here is live, so nothing re-reads it.
  */
 @Composable
-private fun PlayerInfoDialog(viewModel: PlayerViewModel) {
+private fun PlayerInfoOverlay(viewModel: PlayerViewModel) {
     val sections = viewModel.info ?: return
-    InfoDialog(
-        title = stringResource(R.string.player_info),
-        onDismiss = viewModel::dismissInfo,
-        sections = sections,
-    )
+
+    BackHandler { viewModel.dismissInfo() }
+    // The whole screen is a target, but not a sheet: a press on the picture
+    // closes this, and the panel below is what is seen. Nothing is dimmed, so
+    // the film stays the film.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                // No ripple: it would read as the picture itself being pressed.
+                indication = null,
+                onClick = viewModel::dismissInfo,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth(PLAYER_INFO_WIDTH_FRACTION)
+                .fillMaxHeight(PLAYER_INFO_HEIGHT_FRACTION)
+                .clip(RoundedCornerShape(16.dp))
+                .background(PLAYER_INFO_PANEL)
+                // Swallows taps so a press inside the panel — on a label, on the
+                // padding — does not close it. Only the picture around it does.
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                ),
+        ) {
+            // The scroll takes the drags; a tap is left for the panel's own
+            // no-op, and one outside it for the screen behind.
+            InfoSectionList(
+                sections = sections,
+                colors = PLAYER_INFO_COLORS,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 4.dp),
+            )
+        }
+    }
 }
+
+/**
+ * A panel, not a sheet: the picture stays visible on all four sides, which is
+ * what says the film is still there and this is over it. Wide enough for a path
+ * on one line in landscape, tall enough to show most of the rows before they
+ * scroll.
+ */
+private const val PLAYER_INFO_WIDTH_FRACTION = 0.6f
+private const val PLAYER_INFO_HEIGHT_FRACTION = 0.64f
+
+/** Dark enough that white text reads over any frame, transparent enough to see it. */
+private val PLAYER_INFO_PANEL = Color.Black.copy(alpha = 0.8f)
+
+/** The player's own palette: no theme, because there is no surface under it. */
+private val PLAYER_INFO_COLORS = InfoColors(
+    section = Color.White,
+    label = Color.White.copy(alpha = 0.7f),
+    value = Color.White,
+)
 
 @Composable
 private fun Immersive() {

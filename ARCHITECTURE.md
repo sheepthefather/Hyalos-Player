@@ -295,7 +295,9 @@ ExoPlayer ─ ProgressiveMediaSource
 
 ### 播放器里的「视频信息」
 
-顶栏第二个图标，用的是同一套排版（`ui/common/InfoDialog.kt`），但**问的是另一个问题**：浏览器那份说「这个文件是什么」，这份说「播放器正在怎么放它」。所以数据来源不同——轨道取自**正在跑的播放器**（`player.getCurrentTracks()` → `Group.getTrackFormat(i)`），不重新探一次文件：省一次往返，而且它描述的是**实际在播的那条流**，还包括「这台设备能不能解这条轨道」（`Group.getTrackSupport(i)`，文件自己答不了这个）。另加一组「解码」。
+顶栏第二个图标，**排版共用、外观不共用**，而且**问的是另一个问题**：浏览器那份说「这个文件是什么」，这份说「播放器正在怎么放它」。`ui/common/InfoDialog.kt` 共用的是结构与文字（标签列、值换行、分组标题、空分组＝无），颜色由调用方给：浏览器用主题化的对话框，播放器用**居中的半透明黑底圆角面板**浮在画面上——浅色的 Material 表面出现在影片中间，会有一瞬间像换了个应用，而面板是播放器自己的家具，与控制条同源。尺寸是屏幕的 60%×64%，四周都留着画面，这本身就是「影片还在、这只是盖在上面」的提示。**点面板外或按返回关闭**：点画面让盖在它上面的东西消失，是每个播放器都有、每个人都会的那一个手势，所以没有按钮也没有提示。面板内部的点击被自己吃掉，点标签不会误关。
+
+第一次做错的地方值得记：铺满全屏的那版把 `PlayerInfoOverlay` 画在 `AndroidView` **之前**，整个被 `SurfaceView` 盖住、什么都不显示；位置对（Box 里的最后一个）但顺序错，症状是「暂停生效了、面板没出来」。所以数据来源不同——轨道取自**正在跑的播放器**（`player.getCurrentTracks()` → `Group.getTrackFormat(i)`），不重新探一次文件：省一次往返，而且它描述的是**实际在播的那条流**，还包括「这台设备能不能解这条轨道」（`Group.getTrackSupport(i)`，文件自己答不了这个）。另加一组「解码」。
 
 **解码器名字只能靠回调拿。** Media3 没有任何同步查询 API——没有 `getCurrentDecoder()`——名字只在 `AnalyticsListener.onVideoDecoderInitialized` 里出现一次，所以必须在 ViewModel 里挂 listener、一路缓存；mime 另从 `onVideoInputFormatChanged` 取，解码器回调不带它。listener 在构造时就挂上（解码器只在开头初始化一次），且**移除必须传同一个实例**（Media3 按身份认），所以它是字段而不是 inline 对象。
 
@@ -364,4 +366,5 @@ ExoPlayer ─ ProgressiveMediaSource
 | **播放会话的读取是串行的** | 一次读卡住最多 20 秒，其间 seek 排在它后面。浏览用另一个会话，不受影响。 |
 | **MKV 里的 AC3 / DTS / TrueHD 音轨** | 很多设备没有对应的硬件解码器，结果是有画面没声音。Jellyfin 预编译的 `media3-ffmpeg-decoder` 只到 1.9.0、跟不上 Media3 1.11，本轮作为已知限制。 |
 | **每个 1 MiB 块都新分配一次** | 4K 码流约每秒 12 次大对象分配，目前可接受；真机上若出现 GC 卡顿，再改成复用缓冲。 |
+| **播放器页面上 `uiautomator dump` 不可用** | 在播放中/暂停的播放器页面，`adb shell uiautomator dump` 报 `ERROR: could not get idle state`，**不出快照**——而它失败时**不会删掉上一次的 `/sdcard/*.xml`**，于是脚本读到的是一份陈旧层级，判定全是假的。这一轮里它先后骗出过两次「点面板内部会误关」的结论，实际上代码没问题。播放器页面的判定改用 `adb exec-out screencap` 截图；若要用 dump，先 `rm -f` 那个文件。 |
 | **模拟器需关掉 `HardwareDecoder` 才能播视频** | 模拟器把 goldfish H.264 解码器声明为硬件解码器，而播放器都按惯例优先选硬件解码器——它的输出在模拟器的 host 端 YUV→RGB 环节丢色度，画面全绿。**启动加 `-feature -HardwareDecoder`** 让播放器回退到 AOSP 软件解码器即可。这是已知上游问题（[Google #192401724](https://issuetracker.google.com/issues/192401724)、[androidx/media#2461](https://github.com/androidx/media/issues/2461)），真机不受影响。 |

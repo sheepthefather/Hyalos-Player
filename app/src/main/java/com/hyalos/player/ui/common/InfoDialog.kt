@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.hyalos.player.R
@@ -66,7 +67,14 @@ fun InfoDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    sections.forEach { InfoSectionBlock(it) }
+                    InfoSectionList(
+                        sections = sections,
+                        colors = InfoColors(
+                            section = MaterialTheme.colorScheme.primary,
+                            label = MaterialTheme.colorScheme.onSurfaceVariant,
+                            value = MaterialTheme.colorScheme.onSurface,
+                        ),
+                    )
                 }
             }
         },
@@ -79,36 +87,57 @@ fun InfoDialog(
     )
 }
 
+/**
+ * How the rows are drawn.
+ *
+ * The layout is shared; the colours are not. The browser shows them on a themed
+ * dialog, the player on a scrim over the picture — white on black, because a
+ * light Material surface in the middle of a film is a different app for a
+ * moment.
+ */
+data class InfoColors(val section: Color, val label: Color, val value: Color)
+
+/**
+ * The sections themselves, as a column. Callers put them where they belong: a
+ * dialog, or an overlay on a scrim.
+ */
 @Composable
-private fun InfoSectionBlock(section: InfoSection) {
+fun InfoSectionList(sections: List<InfoSection>, colors: InfoColors, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        sections.forEach { InfoSectionBlock(it, colors) }
+    }
+}
+
+@Composable
+private fun InfoSectionBlock(section: InfoSection, colors: InfoColors) {
     Text(
         stringResource(section.title),
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = colors.section,
         modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
     )
     // An empty group means there is nothing of that kind — no audio track, no
     // subtitles — which is worth a line of its own.
     if (section.rows.isEmpty()) {
-        InfoLine(InfoRow(R.string.info_track, stringResource(R.string.info_none)))
+        InfoLine(InfoRow(R.string.info_track, stringResource(R.string.info_none)), colors)
         return
     }
-    section.rows.forEach { InfoLine(it) }
+    section.rows.forEach { InfoLine(it, colors) }
 }
 
 /** Label in a fixed column, value wrapping beside it. */
 @Composable
-private fun InfoLine(row: InfoRow) {
+private fun InfoLine(row: InfoRow, colors: InfoColors) {
     Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Text(
             stringResource(row.label),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = colors.label,
             modifier = Modifier.width(INFO_LABEL_WIDTH),
         )
         // A null value means the label is the whole statement — see `InfoRow`.
         row.value?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium)
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.value)
         }
     }
 }
