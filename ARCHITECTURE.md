@@ -207,7 +207,14 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **用 `PlayerView` 而非 Compose 版 `Player`**：后者在 Media3 1.11 仍是 `@ExperimentalApi`，且没有控制条自动隐藏、缓冲指示器与音轨选择——NAS 上的电影常有多条音轨，缺音轨选择直接影响使用。`ExoPlayer` 放在 ViewModel 里，旋转屏幕不重建也不重连。
 
-**控制条布局是抄来的**（`res/layout/player_controller.xml`）。Media3 没有移动中间那组按钮的 API——`controller_layout_id` 是个 **styleable**，`PlayerControlView` 只提供读它的构造参数、没有 setter——所以想改布局只能把 `exo_player_control_view.xml` 复制进来自己改，`player_view.xml` 存在的唯一理由就是把这份布局交给 `PlayerView`。两处改动：`exo_center_controls` 从屏幕中央挪到底部、占满宽度并用底栏同色背景（**id 必须保留**，Media3 靠这个 id 做控制条的淡入淡出；`layout_width` 改成 `match_parent` 是为了让按钮与底栏连成一条，否则白色图标会直接压在画面亮部上）；设置按钮换成 `ic_tune`，因为右上角已经有了应用自己的「播放设置」齿轮，同一块屏幕上的两颗齿轮会被当成同一个控件。代价要记住：Media3 的升级不会再进到这个文件，而 `PlayerControlView` 是按 id 逐个查找控件、**找不到就静默不接线**——改漏一个 id 不会报错，只会有一个按钮没反应。
+**控制条布局是抄来的**（`res/layout/player_controller.xml`）。Media3 没有移动中间那组按钮的 API——`controller_layout_id` 是个 **styleable**，`PlayerControlView` 只有读它的构造参数、没有 setter——所以想改布局只能把 `exo_player_control_view.xml` 复制进来自己改，`player_view.xml` 存在的唯一理由就是把这份布局交给 `PlayerView`。两处改动：
+
+- **那组「上一个 / 后退 / 播放暂停 / 前进 / 下一个」搬进了 `exo_bottom_bar`**，与左边的时间、右边的设置同一行，`layout_gravity="center"` 居中。**组 id 必须留着 `exo_center_controls`**：`PlayerControlViewLayoutManager` 靠这个 id 做淡入淡出。它改成 `wrap_content`，且只在左右留 padding——底栏 60dp、这些按钮 52dp，原来四周 24dp 的 padding 在里面没有位置，`match_parent` 也会让下面那个测量读到整屏的宽度。
+- 设置按钮换成 `ic_tune`，因为右上角已经有了应用自己的「播放设置」齿轮，同一块屏幕上的两颗齿轮会被当成同一个控件。
+
+**这个 id 还参与一处容易踩的测量。** `useMinimalMode()` 拿这组的宽度（`getWidth() + margins − 自身的 paddingLeft/Right`）与「时间 + 溢出按钮」的宽度取 `max`，再和可用宽度比：不够就切「最小化模式」，那时 `exo_bottom_bar` 整个 `GONE`，屏幕上只剩一个全屏按钮。搬这组按钮之前值得知道的两件事，都是从字节码里读出来的：`shouldHideInMinimalMode` **按 id 逐个判断**（`exo_bottom_bar`、`exo_prev`、`exo_next`、`exo_rew`、`exo_rew_with_amount`、`exo_ffwd`…），不看父子关系，所以嵌进底栏不影响它；而 `PlayerControlViewLayoutManager` 对这组只做 `setAlpha` 和上面那个测量，**不碰布局参数**，所以换了父容器也不会被改回去。
+
+代价要记住：Media3 的升级不会再进到这个文件，而 `PlayerControlView` 是按 id 逐个查找控件、**找不到就静默不接线**——改漏一个 id 不会报错，只会有一个按钮没反应。
 
 顺带一条给下次换图标的：控制条上的图标必须**自带颜色**。`ExoStyledControls.Button` 只设 background、scaleType 和 margin，Media3 的样式里没有任何 `android:tint`，所以每个 `exo_styled_controls_*` 自己填 `#FFFFFFFF`。照 Compose 的习惯写成黑色 path，会得到一枚黑底上的黑图标。
 

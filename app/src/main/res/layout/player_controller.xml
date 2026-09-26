@@ -23,10 +23,13 @@
 
   Two departures from the original, both marked below:
 
-    1. `exo_center_controls` is placed at the bottom rather than the centre. The
-       id is deliberately kept: `PlayerControlViewLayoutManager` shows and hides
-       that group by id, so the auto-hide animation is still Media3's. The bottom
-       margin clears the time bar underneath.
+    1. The transport buttons sit inside `exo_bottom_bar`, in the same row as the
+       time and the settings button, rather than floating over the middle of the
+       picture. The group keeps the id `exo_center_controls`, because that id is
+       what `PlayerControlViewLayoutManager` fades and what it measures. It is
+       `wrap_content` — with `match_parent` the group would report the screen's
+       width as its own, and that measurement is what decides whether the
+       controls still fit.
     2. The settings button's icon is ours. Media3's gear opens the track and
        speed menu, and the app has a gear of its own in the title bar that opens
        the app's settings; two gears in the same corner of the screen would read
@@ -128,6 +131,43 @@
 
     </HorizontalScrollView>
 
+    <!-- DEPARTURE 1. Between the time on the left and the buttons on the right,
+         and centred on the screen rather than on the gap between them: those two
+         are different widths, so centring on the gap would put the row slightly
+         off-centre for no gain.
+
+         Started `exo_center_controls`, so `PlayerControlViewLayoutManager` finds
+         it: that id is how it fades the group, and how it measures whether the
+         controls still fit. Last child, so the group draws over the rest of the
+         bar — the same order it had in the original, where it came after it.
+
+         `wrap_content`, and the padding only on the sides: the bar is 60dp and
+         these buttons are 52dp, so vertical padding has nowhere to go. -->
+    <LinearLayout
+        android:id="@id/exo_center_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:paddingStart="@dimen/exo_styled_controls_padding"
+        android:paddingEnd="@dimen/exo_styled_controls_padding"
+        android:layoutDirection="ltr">
+
+      <ImageButton android:id="@id/exo_prev"
+          style="@style/ExoStyledControls.Button.Center.Previous"/>
+
+      <include layout="@layout/exo_player_control_rewind_button" />
+
+      <ImageButton android:id="@id/exo_play_pause"
+          style="@style/ExoStyledControls.Button.Center.PlayPause"/>
+
+      <include layout="@layout/exo_player_control_ffwd_button" />
+
+      <ImageButton android:id="@id/exo_next"
+          style="@style/ExoStyledControls.Button.Center.Next"/>
+
+    </LinearLayout>
+
   </FrameLayout>
 
   <View android:id="@id/exo_progress_placeholder"
@@ -147,40 +187,6 @@
 
     <ImageButton android:id="@id/exo_minimal_fullscreen"
         style="@style/ExoStyledControls.Button.Bottom.FullScreen"/>
-
-  </LinearLayout>
-
-  <!-- DEPARTURE 1: bottom instead of centre. The id stays `exo_center_controls`
-       because that is the group Media3 fades in and out.
-
-       It spans the width and wears the bottom bar's own background, so the two
-       read as one bar rather than as buttons floating over the picture. Left
-       transparent, white glyphs land on whatever the film is showing — which is
-       how the previous-first attempt looked. -->
-  <LinearLayout
-      android:id="@id/exo_center_controls"
-      android:layout_width="match_parent"
-      android:layout_height="wrap_content"
-      android:layout_gravity="bottom"
-      android:layout_marginBottom="@dimen/exo_styled_bottom_bar_height"
-      android:background="@color/exo_bottom_bar_background"
-      android:gravity="center"
-      android:padding="@dimen/exo_styled_controls_padding"
-      android:clipToPadding="false"
-      android:layoutDirection="ltr">
-
-    <ImageButton android:id="@id/exo_prev"
-        style="@style/ExoStyledControls.Button.Center.Previous"/>
-
-    <include layout="@layout/exo_player_control_rewind_button" />
-
-    <ImageButton android:id="@id/exo_play_pause"
-        style="@style/ExoStyledControls.Button.Center.PlayPause"/>
-
-    <include layout="@layout/exo_player_control_ffwd_button" />
-
-    <ImageButton android:id="@id/exo_next"
-        style="@style/ExoStyledControls.Button.Center.Next"/>
 
   </LinearLayout>
 
