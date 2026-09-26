@@ -105,7 +105,6 @@ class PlayerViewModel(
                     val playing = mediaItem?.localConfiguration?.uri?.path ?: return
                     _title.value = titleOf(playing)
                 }
-
             },
         )
 
