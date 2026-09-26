@@ -70,6 +70,7 @@ fun SettingsScreen(
                     R.string.settings_playback_summary,
                     stringResource(if (settings.autoPlayNext) R.string.state_on else R.string.state_off),
                     stringResource(scaleLabel(settings.videoScale)),
+                    stringResource(orientationLabel(settings.initialOrientation)),
                 ),
                 onClick = onOpenPlayback,
             )

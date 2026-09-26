@@ -7,12 +7,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.AppSettings
+import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * The two playback choices that belong to no one file.
+ * The three playback choices that belong to no one file.
  *
  * Read once and then written optimistically. "Once" is every visit: the entry's
  * ViewModelStore is cleared when the page is popped, so re-entering builds a
@@ -28,11 +29,16 @@ class PlaybackSettingsViewModel(private val container: AppContainer) : ViewModel
     var videoScale by mutableStateOf(AppSettings().videoScale)
         private set
 
+    /** Which way up the player opens. */
+    var initialOrientation by mutableStateOf(AppSettings().initialOrientation)
+        private set
+
     init {
         viewModelScope.launch {
             val settings = container.settings.settings.first()
             autoPlayNext = settings.autoPlayNext
             videoScale = settings.videoScale
+            initialOrientation = settings.initialOrientation
         }
     }
 
@@ -44,5 +50,10 @@ class PlaybackSettingsViewModel(private val container: AppContainer) : ViewModel
     fun onVideoScaleChange(scale: VideoScale) {
         videoScale = scale
         viewModelScope.launch { container.settings.setVideoScale(scale) }
+    }
+
+    fun onInitialOrientationChange(orientation: PlaybackOrientation) {
+        initialOrientation = orientation
+        viewModelScope.launch { container.settings.setInitialOrientation(orientation) }
     }
 }

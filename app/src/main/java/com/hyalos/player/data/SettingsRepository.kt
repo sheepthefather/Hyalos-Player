@@ -36,6 +36,10 @@ class SettingsRepository(private val store: DataStore<AppSettings>) {
         store.updateData { it.copy(videoScale = scale) }
     }
 
+    suspend fun setInitialOrientation(orientation: PlaybackOrientation) {
+        store.updateData { it.copy(initialOrientation = orientation) }
+    }
+
     companion object {
         fun create(context: Context): SettingsRepository = SettingsRepository(
             DataStoreFactory.create(

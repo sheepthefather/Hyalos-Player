@@ -207,12 +207,15 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **用 `PlayerView` 而非 Compose 版 `Player`**：后者在 Media3 1.11 仍是 `@ExperimentalApi`，且没有控制条自动隐藏、缓冲指示器与音轨选择——NAS 上的电影常有多条音轨，缺音轨选择直接影响使用。`ExoPlayer` 放在 ViewModel 里，旋转屏幕不重建也不重连。
 
-**控制条布局是抄来的**（`res/layout/player_controller.xml`）。Media3 没有移动中间那组按钮的 API——`controller_layout_id` 是个 **styleable**，`PlayerControlView` 只有读它的构造参数、没有 setter——所以想改布局只能把 `exo_player_control_view.xml` 复制进来自己改，`player_view.xml` 存在的唯一理由就是把这份布局交给 `PlayerView`。两处改动：
+**控制条布局是抄来的**（`res/layout/player_controller.xml`）。Media3 没有移动中间那组按钮的 API——`controller_layout_id` 是个 **styleable**，`PlayerControlView` 只有读它的构造参数、没有 setter——所以想改布局只能把 `exo_player_control_view.xml` 复制进来自己改，`player_view.xml` 存在的唯一理由就是把这份布局交给 `PlayerView`。三处改动：
 
 - **那组「上一个 / 后退 / 播放暂停 / 前进 / 下一个」搬进了 `exo_bottom_bar`**，与左边的时间、右边的设置同一行，`layout_gravity="center"` 居中。**组 id 必须留着 `exo_center_controls`**：`PlayerControlViewLayoutManager` 靠这个 id 做淡入淡出。它改成 `wrap_content`，且只在左右留 padding——底栏 60dp、这些按钮 52dp，原来四周 24dp 的 padding 在里面没有位置，`match_parent` 也会让下面那个测量读到整屏的宽度。
 - 设置按钮换成 `ic_tune`，因为右上角已经有了应用自己的「播放设置」齿轮，同一块屏幕上的两颗齿轮会被当成同一个控件。
+- **底栏最右端加了我们自己的横竖屏按钮**（`@id/player_orientation`，在一个独立的组里）。**它不能放进 `exo_basic_controls`**：`PlayerControlViewLayoutManager` 运行时会用 `removeViewAt` / `addView` 在那组和 `exo_extra_controls` 之间搬运子 View（溢出切换就是这么做的），放进去会被连人带行李搬走。作为补偿，Media3 那两个贴右端的组各加了 `layout_marginEnd="@dimen/exo_small_icon_width"` 给它让位——这一条安全，因为布局管理器全文只有一处 `setLayoutParams`，作用在 `timeBar` 上，对这两组只做 `setVisibility` / `setAlpha`。
 
 **这个 id 还参与一处容易踩的测量。** `useMinimalMode()` 拿这组的宽度（`getWidth() + margins − 自身的 paddingLeft/Right`）与「时间 + 溢出按钮」的宽度取 `max`，再和可用宽度比：不够就切「最小化模式」，那时 `exo_bottom_bar` 整个 `GONE`，屏幕上只剩一个全屏按钮。搬这组按钮之前值得知道的两件事，都是从字节码里读出来的：`shouldHideInMinimalMode` **按 id 逐个判断**（`exo_bottom_bar`、`exo_prev`、`exo_next`、`exo_rew`、`exo_rew_with_amount`、`exo_ffwd`…），不看父子关系，所以嵌进底栏不影响它；而 `PlayerControlViewLayoutManager` 对这组只做 `setAlpha` 和上面那个测量，**不碰布局参数**，所以换了父容器也不会被改回去。
+
+**竖屏装不下这一行，所以竖屏少放三个东西。** 实测（1080px 宽、密度 2.625）：时间 317px、那组按钮 941px、推子 136px、旋转按钮 136px，合计 1530px 对 1080px；把时间整个去掉、内边距清零仍差 7px。于是竖屏时 `exo_prev`、`exo_next` 与 `exo_time` 设成 `GONE`（在 `AndroidView` 的 `update` 里按方向设），剩 ↺ / 播放暂停 / ↻ 与右端两个图标，约 887px，宽裕。队列本身不受影响——影片照旧连播，只是这两个按钮不画。**这与 Media3 的「最小化模式」不是一回事**：那套按 id 隐藏 `exo_bottom_bar` 等，判据是它自己量出来的宽高，管不到我们新加的按钮。
 
 代价要记住：Media3 的升级不会再进到这个文件，而 `PlayerControlView` 是按 id 逐个查找控件、**找不到就静默不接线**——改漏一个 id 不会报错，只会有一个按钮没反应。
 
@@ -223,6 +226,10 @@ ExoPlayer ─ ProgressiveMediaSource
 ### 播放器的三个行为
 
 **进入即播放，且不在旋转时中断。** 这一条曾经是坏的，且坏法值得记住：`PlayerScreen` 为宽屏视频设置 `SENSOR_LANDSCAPE`，而清单当时没有声明 `configChanges`，于是横屏被当作配置变更、**Activity 重建**，旧界面的 `ON_STOP { player.pause() }` 触发——而 player 活在 ViewModel 里、配置变更不重建它。结果是视频打开、第一帧也在、然后停在那里：日志显示它只播了 24 毫秒。修法是清单声明 `configChanges`（顺带消除旋转时 SurfaceView 被拆掉重建的黑屏闪烁），再加上 `ON_STOP` 里跳过 `isChangingConfigurations`——后者在清单修好后不会触发，但别的重建原因（语言、分屏）会以完全相同的方式失败。
+
+**方向由设置决定，不再看视频的形状。** 上面那条说的「为宽屏视频设置 `SENSOR_LANDSCAPE`」已经作废：在一个有「初始方向」设置的播放器里，那条规则要么多余要么打架——竖着拍的视频被强行横屏，而设置里写的是竖屏。现在设置就是答案，「跟随视频」这个选项随之取消；影片与设置不符时，用底栏最右那个按钮切。
+
+**那个按钮的选择只影响本次播放，而且只能放在 ViewModel 里。** 放 `remember` 会丢：播放器被设置页盖住时组合会被销毁（`dumpsys activity top` 看过，PlayerView 与 SurfaceView 都不在视图树里），回来就退回设置的方向。ViewModel 熬得过这一程，而出栈时被清掉——正好就是「本次播放」。按钮点击时读的是**那一刻**设备的方向（`context.resources.configuration`），不是捕获进来的值：`AndroidView` 的 factory 只跑一次，捕获的值会永远是影片刚打开时的方向。
 
 **进播放设置会暂停影片，这是留着的。** 不在 `PlayerScreen` 里为它单开例外：暂停写在同一处 `ON_STOP`，而被应用内页面盖住时播放器 entry 的生命周期同样走到 STOPPED——一条规则「离开播放页就暂停」比两条各自成立的规则更难写错。代价可以接受，因为播放设置页是不透明的，画面本来也看不见。真要说有什么损失，是改「画面比例」的人回来要再按一次播放。若哪天要改成「回来接着播」，判据是 **Activity 是否真的不可见**：被自家页面盖住时它仍是 STARTED/RESUMED，离开应用时才是 CREATED，用 `activity.lifecycle.currentState.isAtLeast(STARTED)` 就能分开——但别改成只在 `PlayerScreen` 组合期内注册的观察者，播放器被设置页盖住后那个组合会被销毁，从此离开应用就再也没人暂停它，影片会在后台一直响。
 

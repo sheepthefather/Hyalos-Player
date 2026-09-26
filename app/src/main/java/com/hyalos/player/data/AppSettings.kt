@@ -44,6 +44,17 @@ data class AppSettings(
 
     /** How video is fitted to the screen. */
     val videoScale: VideoScale = VideoScale.FIT,
+
+    /**
+     * Which way up the player starts.
+     *
+     * Landscape by default, which is what most films are and what the player did
+     * unconditionally before this was a setting. Portrait is for the case that
+     * used to be handled by looking at the video's shape, and now is not: a film
+     * shot upright opens sideways unless either this is set or the rotate button
+     * on the controller is tapped.
+     */
+    val initialOrientation: PlaybackOrientation = PlaybackOrientation.LANDSCAPE,
 ) {
     companion object {
         const val DEFAULT_THUMBNAIL_CACHE_MB = 100
@@ -78,4 +89,23 @@ enum class VideoScale {
 
     /** Fills the screen keeping the aspect ratio, cropping the overflow. */
     ZOOM,
+}
+
+/**
+ * Which way up the player opens, and — until the rotate button is tapped —
+ * stays.
+ *
+ * Only two, deliberately: there is no "follow the video" case any more. The
+ * player used to turn itself landscape whenever the video was wider than tall,
+ * which made a setting about orientation either redundant or contradictory
+ * depending on the film. Now the setting is the answer, and the button on the
+ * controller is how a film that disagrees with it gets played the other way.
+ */
+@Serializable
+enum class PlaybackOrientation {
+    /** The phone on its side. What most films are. */
+    LANDSCAPE,
+
+    /** The phone upright. For a film shot that way. */
+    PORTRAIT,
 }

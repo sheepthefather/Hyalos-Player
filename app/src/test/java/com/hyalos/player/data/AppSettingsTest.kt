@@ -47,6 +47,28 @@ class AppSettingsTest {
     }
 
     @Test
+    fun `the player starts landscape unless told otherwise`() {
+        // What the player did unconditionally before this was a setting, so an
+        // existing install sees no change on upgrading.
+        assertEquals(PlaybackOrientation.LANDSCAPE, AppSettings().initialOrientation)
+    }
+
+    @Test
+    fun `the initial orientation is stored by name as well`() {
+        val encoded = json.encodeToString(
+            AppSettings.serializer(),
+            AppSettings(initialOrientation = PlaybackOrientation.PORTRAIT),
+        )
+        assertEquals(true, encoded.contains("\"PORTRAIT\""))
+    }
+
+    @Test
+    fun `a settings file with no orientation key opens landscape`() {
+        val decoded = json.decodeFromString(AppSettings.serializer(), """{"autoPlayNext":false}""")
+        assertEquals(PlaybackOrientation.LANDSCAPE, decoded.initialOrientation)
+    }
+
+    @Test
     fun `a settings file from an older version still loads`() {
         // The file that exists on disk today has no `browserLayout` key at all.
         val decoded = json.decodeFromString(AppSettings.serializer(), """{"thumbnailCacheMb":250}""")

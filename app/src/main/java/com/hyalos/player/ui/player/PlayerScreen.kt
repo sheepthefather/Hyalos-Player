@@ -1,7 +1,10 @@
 package com.hyalos.player.ui.player
 
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.view.LayoutInflater
+import android.view.View
+import android.widget.ImageButton
 import androidx.activity.compose.LocalActivity
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -29,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,11 +46,14 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+// The controller's ids live in Media3's own R, not the app's: R classes are not
+// transitive, so `R.id.exo_prev` does not exist on ours.
+import androidx.media3.ui.R as Media3R
 import com.hyalos.player.R
+import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
 
@@ -68,11 +75,27 @@ fun PlayerScreen(
     val player = viewModel.player
     val videoScale by viewModel.videoScale.collectAsStateWithLifecycle()
     val title by viewModel.title.collectAsStateWithLifecycle()
+    val initialOrientation by viewModel.initialOrientation.collectAsStateWithLifecycle()
+    val orientationOverride by viewModel.orientationOverride.collectAsStateWithLifecycle()
     var controlsVisible by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(player.playerError != null) }
 
+    // Where the rotate button would take the picture, which is also what its
+    // icon and its description say. Read from the configuration rather than from
+    // the two values above: the screen can also have been turned by the system,
+    // and what the button means is "the other way from what is on screen now".
+    val portrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
+    val rotateTarget = if (portrait) PlaybackOrientation.LANDSCAPE else PlaybackOrientation.PORTRAIT
+    val rotateLabel = stringResource(
+        if (rotateTarget == PlaybackOrientation.LANDSCAPE) {
+            R.string.player_rotate_to_landscape
+        } else {
+            R.string.player_rotate_to_portrait
+        },
+    )
+
     Immersive()
-    LandscapeForWideVideo(player)
+    PlayerOrientation(orientationOverride ?: initialOrientation)
 
     // No background playback yet, so leaving the app pauses.
     //
@@ -119,11 +142,42 @@ fun PlayerScreen(
                             controlsVisible = visibility == android.view.View.VISIBLE
                         },
                     )
+                    // Our own button in the controller layout. The direction is
+                    // read from the context at tap time rather than captured:
+                    // this factory runs once, so a captured direction would be
+                    // whichever way the screen pointed when the film opened.
+                    findViewById<ImageButton>(R.id.player_orientation)?.setOnClickListener {
+                        viewModel.toggleOrientation(
+                            context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
+                        )
+                    }
                 }
             },
             // Applied here rather than in the factory: the factory runs once, so
             // a later change to the setting would never reach the view.
-            update = { view -> view.resizeMode = videoScale.toResizeMode() },
+            update = { view ->
+                view.resizeMode = videoScale.toResizeMode()
+                view.findViewById<ImageButton>(R.id.player_orientation)?.let { button ->
+                    button.setImageResource(
+                        if (rotateTarget == PlaybackOrientation.LANDSCAPE) {
+                            R.drawable.ic_orientation_landscape
+                        } else {
+                            R.drawable.ic_orientation_portrait
+                        },
+                    )
+                    button.contentDescription = rotateLabel
+                }
+                // Upright there is no room for the whole row. Measured: five
+                // 52dp buttons, the time and the two icons on the right come to
+                // 1530px against a 1080px screen, and even with the time gone
+                // they still overrun. So the two navigation buttons and the time
+                // sit this one out. Nothing leaves the queue itself — the film
+                // still advances, and the buttons return with the landscape.
+                val crowd = if (portrait) View.GONE else View.VISIBLE
+                view.findViewById<View>(Media3R.id.exo_prev)?.visibility = crowd
+                view.findViewById<View>(Media3R.id.exo_next)?.visibility = crowd
+                view.findViewById<View>(Media3R.id.exo_time)?.visibility = crowd
+            },
             // Detach so the view does not hold the player past this screen.
             onRelease = { it.player = null },
             modifier = Modifier.fillMaxSize(),
@@ -245,26 +299,31 @@ private fun Immersive() {
 }
 
 /**
- * Turn to landscape once the video turns out to be wider than tall, and give
- * the orientation back on leaving. Portrait video is left alone.
+ * Hold the screen the way the setting asks, or the way the rotate button last
+ * asked — that is already decided by the caller, which passes one or the other.
+ *
+ * No longer looks at the video's shape. It used to turn landscape whenever the
+ * frame was wider than tall, which made the setting either redundant (for films)
+ * or contradictory (for anything shot upright); now the answer comes from the
+ * setting, and the button on the controller is how the other answer is reached.
+ *
+ * The sensors, not the fixed constants: `SENSOR_LANDSCAPE` allows either
+ * landscape, so turning the phone over does not leave the picture upside down.
  */
 @Composable
-private fun LandscapeForWideVideo(player: Player) {
+private fun PlayerOrientation(wanted: PlaybackOrientation) {
     val activity = LocalActivity.current ?: return
-    DisposableEffect(activity, player) {
-        fun apply(size: VideoSize) {
-            if (size.width > 0 && size.width >= size.height) {
-                activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            }
+    DisposableEffect(activity, wanted) {
+        activity.requestedOrientation = when (wanted) {
+            PlaybackOrientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            PlaybackOrientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
         }
-        val listener = object : Player.Listener {
-            override fun onVideoSizeChanged(videoSize: VideoSize) = apply(videoSize)
-        }
-        apply(player.videoSize)
-        player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
+        // Empty on purpose: the undo lives in the effect below, keyed on the
+        // activity alone. Undoing here would run on every change of direction,
+        // flashing the system's choice before the new one landed.
+        onDispose { }
+    }
+    DisposableEffect(activity) {
+        onDispose { activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
 }

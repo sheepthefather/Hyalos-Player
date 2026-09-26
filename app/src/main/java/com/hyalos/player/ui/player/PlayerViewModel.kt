@@ -11,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.hyalos.player.AppContainer
+import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.playback.KrystallosDataSource
@@ -225,6 +226,36 @@ class PlayerViewModel(
     val videoScale: StateFlow<VideoScale> = container.settings.settings
         .map { it.videoScale }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), VideoScale.FIT)
+
+    /** Which way up the player opens. */
+    val initialOrientation: StateFlow<PlaybackOrientation> = container.settings.settings
+        .map { it.initialOrientation }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlaybackOrientation.LANDSCAPE)
+
+    /**
+     * The direction picked with the rotate button, for this playback only.
+     *
+     * Kept here rather than in the screen's composition, which cannot hold it:
+     * covering the player with the settings page destroys that composition — the
+     * view tree goes with it, measured — so a `remember`ed value would be lost on
+     * the way back, and the film would be the wrong way up again. This ViewModel
+     * survives that, and is itself cleared when the player is popped, which is
+     * exactly "this playback and no further".
+     */
+    private val _orientationOverride = MutableStateFlow<PlaybackOrientation?>(null)
+    val orientationOverride: StateFlow<PlaybackOrientation?> = _orientationOverride.asStateFlow()
+
+    /**
+     * Turn the picture the other way.
+     *
+     * [currentlyLandscape] is read off the device at the moment of the tap rather
+     * than remembered, so that the button means "the other one from what I am
+     * looking at now" however the screen got this way.
+     */
+    fun toggleOrientation(currentlyLandscape: Boolean) {
+        _orientationOverride.value =
+            if (currentlyLandscape) PlaybackOrientation.PORTRAIT else PlaybackOrientation.LANDSCAPE
+    }
 
     /** After an error, try again from where it stopped. */
     fun retry() {

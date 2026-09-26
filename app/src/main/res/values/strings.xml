@@ -70,7 +70,8 @@
     <!-- 设置的入口列表：每行的副标题写回当前值 -->
     <string name="settings_storage">存储</string>
     <string name="settings_about">关于</string>
-    <string name="settings_playback_summary">自动播放下一个：%1$s · 画面比例：%2$s</string>
+    <!-- 「方向」而不是「初始方向」：三个值一行，全称会把这一行挤到换行，末字单独成行。 -->
+    <string name="settings_playback_summary">自动播放下一个：%1$s · 画面比例：%2$s · 方向：%3$s</string>
     <string name="settings_storage_summary">缩略图缓存上限：%1$s</string>
     <string name="settings_about_summary">版本 %1$s</string>
     <string name="state_on">开</string>
@@ -107,6 +108,10 @@
     <string name="scale_fit">适应</string>
     <string name="scale_fill">拉伸</string>
     <string name="scale_zoom">裁切</string>
+    <string name="settings_initial_orientation">初始方向</string>
+    <string name="settings_initial_orientation_hint">横屏：打开影片就横屏。竖屏：打开影片就竖屏。播放时可以用底栏最右边的按钮随时切换，那个切换只影响这一次播放。</string>
+    <string name="orientation_landscape">横屏</string>
+    <string name="orientation_portrait">竖屏</string>
 
     <!-- 文件操作 -->
     <string name="action_rename">重命名</string>
@@ -158,6 +163,9 @@
     <string name="player_settings">播放设置</string>
     <!-- The controller's own menu: playback speed, audio track, subtitles. -->
     <string name="player_options">播放选项</string>
+    <!-- Names the direction the button turns *to*, matching its icon. -->
+    <string name="player_rotate_to_landscape">切换到横屏</string>
+    <string name="player_rotate_to_portrait">切换到竖屏</string>
 
     <!-- 关于 -->
     <string name="about_version">版本 %1$s</string>

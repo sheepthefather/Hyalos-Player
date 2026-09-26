@@ -28,7 +28,7 @@ import com.hyalos.player.R
 /**
  * How playback behaves — the choices that do not belong to any one file.
  *
- * Unlike the cache limit, neither of these costs anything to change, so they are
+ * Unlike the cache limit, none of these costs anything to change, so they are
  * written as soon as they are touched.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -83,6 +83,24 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel, onBack: () -> U
                     FilterChip(
                         selected = viewModel.videoScale == scale,
                         onClick = { viewModel.onVideoScaleChange(scale) },
+                        label = { Text(stringResource(label)) },
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(stringResource(R.string.settings_initial_orientation), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                stringResource(R.string.settings_initial_orientation_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ORIENTATIONS.forEach { (orientation, label) ->
+                    FilterChip(
+                        selected = viewModel.initialOrientation == orientation,
+                        onClick = { viewModel.onInitialOrientationChange(orientation) },
                         label = { Text(stringResource(label)) },
                     )
                 }

@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.hyalos.player.R
+import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 
 /**
@@ -24,6 +25,16 @@ internal val SCALES = listOf(
 @StringRes
 internal fun scaleLabel(scale: VideoScale): Int =
     SCALES.first { (value, _) -> value == scale }.second
+
+/** In the order they are shown; `LANDSCAPE` first because it is the default. */
+internal val ORIENTATIONS = listOf(
+    PlaybackOrientation.LANDSCAPE to R.string.orientation_landscape,
+    PlaybackOrientation.PORTRAIT to R.string.orientation_portrait,
+)
+
+@StringRes
+internal fun orientationLabel(orientation: PlaybackOrientation): Int =
+    ORIENTATIONS.first { (value, _) -> value == orientation }.second
 
 @Composable
 internal fun cacheLimitLabel(megabytes: Int): String =

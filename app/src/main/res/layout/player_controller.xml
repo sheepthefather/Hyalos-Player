@@ -21,7 +21,7 @@
   is the only hook — so this file is ours now, and Media3 updates will not reach
   it.
 
-  Two departures from the original, both marked below:
+  Three departures from the original, all marked below:
 
     1. The transport buttons sit inside `exo_bottom_bar`, in the same row as the
        time and the settings button, rather than floating over the middle of the
@@ -34,6 +34,12 @@
        speed menu, and the app has a gear of its own in the title bar that opens
        the app's settings; two gears in the same corner of the screen would read
        as one control.
+    3. A rotate button of our own sits at the far right of the bar, past
+       Media3's buttons. It is in a group of its own and *not* in
+       `exo_basic_controls`, which the layout manager moves children in and out
+       of at runtime — a button put there would be shuffled away with the
+       overflow. For the same reason Media3's two right-hand groups are given a
+       trailing margin, to make room rather than sit underneath.
 
   Everything else — the ids, the styles, the dimensions — is byte for byte the
   original, because `PlayerControlView` looks each one up by id and silently
@@ -81,10 +87,15 @@
 
     </LinearLayout>
 
+    <!-- The trailing margin on this group and the scroll view below is DEPARTURE
+         3's other half: it makes room for the rotate button rather than letting
+         Media3's buttons sit under it. One Media3 button's width, because that is
+         exactly what is being placed to the right of them. -->
     <LinearLayout android:id="@id/exo_basic_controls"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="@dimen/exo_small_icon_width"
         android:layoutDirection="ltr">
 
       <ImageButton android:id="@id/exo_vr"
@@ -117,6 +128,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
+        android:layout_marginEnd="@dimen/exo_small_icon_width"
         android:visibility="invisible">
 
       <LinearLayout android:id="@id/exo_extra_controls"
@@ -165,6 +177,27 @@
 
       <ImageButton android:id="@id/exo_next"
           style="@style/ExoStyledControls.Button.Center.Next"/>
+
+    </LinearLayout>
+
+    <!-- DEPARTURE 3: ours. A group of its own, on purpose — Media3 moves
+         children in and out of `exo_basic_controls` at runtime, so a button
+         placed there would be carried off with the overflow.
+
+         Both the icon and the description are replaced from Compose as the
+         screen turns, so the values here are only what the first frame shows. -->
+    <LinearLayout
+        android:id="@+id/player_orientation_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:layoutDirection="ltr">
+
+      <ImageButton
+          android:id="@+id/player_orientation"
+          style="@style/ExoStyledControls.Button.Bottom"
+          android:src="@drawable/ic_orientation_landscape"
+          android:contentDescription="@string/player_rotate_to_landscape" />
 
     </LinearLayout>
 
