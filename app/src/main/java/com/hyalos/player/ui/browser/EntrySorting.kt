@@ -83,7 +83,9 @@ object EntrySorting {
         val byName = Comparator<BrowserItem> { a, b -> nameOrder.compare(a.name, b.name) }
         val byKey: Comparator<BrowserItem> = when (key) {
             SortKey.NAME -> byName
-            SortKey.DATE -> tieBreakWithName(byName) { a, b -> absentLast(a.modifiedMs, b.modifiedMs) }
+            // Absent dates count as the earliest there is, so they lead the
+            // ascending order and trail the descending one. See `absentFirst`.
+            SortKey.DATE -> tieBreakWithName(byName) { a, b -> absentFirst(a.modifiedMs, b.modifiedMs) }
             SortKey.SIZE -> tieBreakWithName(byName) { a, b -> absentLast(a.size, b.size) }
             // Extensions are ASCII, so the locale collator would only add noise.
             SortKey.TYPE -> tieBreakWithName(byName) { a, b -> extensionOf(a.name).compareTo(extensionOf(b.name)) }
@@ -110,12 +112,30 @@ object EntrySorting {
     }
 
     /**
-     * Compare two optional values, sorting the absent ones **last**.
+     * Compare two optional dates, with the absent ones counting as the
+     * **earliest** — first when ascending, last when descending.
      *
-     * Servers do omit timestamps — SMB reports zero and that becomes `None` — and
-     * a directory has no meaningful size. Treating those as zero would scatter
-     * them through the list pretending to be from 1970 or to be empty; putting
-     * them at the end keeps the real values together.
+     * Servers do omit timestamps (SMB says so with a zero, and the kernel turns
+     * both that and the protocol's own sentinel into `None`). A file nothing is
+     * known about is not from 1970, but "before everything that has a date" is
+     * the honest place to put it: it keeps the dated files together, and it
+     * reads the same from either end — the unknown ones are simply what you
+     * reach after the oldest real file.
+     */
+    private fun <T : Comparable<T>> absentFirst(a: T?, b: T?): Int = when {
+        a == null && b == null -> 0
+        a == null -> -1
+        b == null -> 1
+        else -> a.compareTo(b)
+    }
+
+    /**
+     * Compare two optional sizes, sorting the absent ones **last**.
+     *
+     * A directory has no meaningful size, and treating that as zero would file
+     * it among the smallest things in the list — a claim the server never made.
+     * Unlike a date, there is no "earliest" end for a size to belong at, so they
+     * go after everything that has one, whichever way the order runs.
      */
     private fun <T : Comparable<T>> absentLast(a: T?, b: T?): Int = when {
         a == null && b == null -> 0

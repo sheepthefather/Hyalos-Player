@@ -57,15 +57,22 @@ class EntrySortingTest {
     }
 
     @Test
-    fun `files with no date sink, in either direction`() {
-        // SMB reports no timestamp as zero, which becomes null here. Sorting
-        // those as if they were 1970 would sprinkle them through the list.
+    fun `files with no date count as the earliest`() {
+        // A server that reports no timestamp becomes null here. It is not 1970,
+        // but it belongs before everything that does have a date — and so after
+        // everything, once the order is reversed.
         val dated = entry("dated.mkv", modifiedMs = 5_000)
         val undated = entry("undated.mkv", modifiedMs = null)
         val later = entry("later.mkv", modifiedMs = 9_000)
 
-        assertEquals(listOf("dated.mkv", "later.mkv", "undated.mkv"), names(dated, undated, later, key = SortKey.DATE))
-        assertEquals(listOf("undated.mkv", "later.mkv", "dated.mkv"), names(dated, undated, later, key = SortKey.DATE, ascending = false))
+        assertEquals(
+            listOf("undated.mkv", "dated.mkv", "later.mkv"),
+            names(dated, undated, later, key = SortKey.DATE),
+        )
+        assertEquals(
+            listOf("later.mkv", "dated.mkv", "undated.mkv"),
+            names(dated, undated, later, key = SortKey.DATE, ascending = false),
+        )
     }
 
     @Test
