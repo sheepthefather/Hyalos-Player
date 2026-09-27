@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -78,30 +80,49 @@ fun EntryList(
     onLongClick: (EntryRow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyColumn(modifier.fillMaxSize()) {
-        // Keyed by id, not by name: a playlist may hold the same file name from
-        // two folders, and duplicate keys make a lazy list misplace its items.
-        items(items, key = { it.id }) { row ->
-            val isSelected = row.id in selected
-            ListItem(
-                modifier = Modifier
-                    .combinedClickable(onClick = { onClick(row) }, onLongClick = { onLongClick(row) })
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-                    ),
-                leadingContent = {
-                    // The check sits over the thumbnail rather than replacing it:
-                    // the picture is what tells films apart, and hiding it is
-                    // exactly what you do not want while choosing among them.
-                    Box {
-                        ThumbnailFrame(row, loadThumbnail, Modifier.size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT))
-                        if (isSelected) SelectedBadge(Modifier.align(Alignment.Center))
-                    }
-                },
-                headlineContent = { Text(row.name, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                supportingContent = row.detail?.let { { Text(it) } },
-            )
+    val state = rememberLazyListState()
+    Box(modifier.fillMaxSize()) {
+        LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
+            // Keyed by id, not by name: a playlist may hold the same file name
+            // from two folders, and duplicate keys make a lazy list misplace its
+            // items.
+            items(items, key = { it.id }) { row ->
+                val isSelected = row.id in selected
+                ListItem(
+                    modifier = Modifier
+                        .combinedClickable(
+                            onClick = { onClick(row) },
+                            onLongClick = { onLongClick(row) },
+                        )
+                        .background(
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                Color.Transparent
+                            },
+                        ),
+                    leadingContent = {
+                        // The check sits over the thumbnail rather than
+                        // replacing it: the picture is what tells films apart,
+                        // and hiding it is exactly what you do not want while
+                        // choosing among them.
+                        Box {
+                            ThumbnailFrame(
+                                row,
+                                loadThumbnail,
+                                Modifier.size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT),
+                            )
+                            if (isSelected) SelectedBadge(Modifier.align(Alignment.Center))
+                        }
+                    },
+                    headlineContent = {
+                        Text(row.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    },
+                    supportingContent = row.detail?.let { { Text(it) } },
+                )
+            }
         }
+        ScrollBar(state, Modifier.align(Alignment.CenterEnd))
     }
 }
 
@@ -120,39 +141,53 @@ fun EntryGrid(
     onLongClick: (EntryRow) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LazyVerticalGrid(
-        // Adaptive rather than a fixed count: the same code gives two columns on
-        // a phone held upright and five on a tablet, without asking the width.
-        columns = GridCells.Adaptive(minSize = GRID_MIN_CELL),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = modifier.fillMaxSize(),
-    ) {
-        items(items, key = { it.id }) { row ->
-            val isSelected = row.id in selected
-            Column(
-                modifier = Modifier.combinedClickable(
-                    onClick = { onClick(row) },
-                    onLongClick = { onLongClick(row) },
-                ),
-            ) {
-                Box {
-                    ThumbnailFrame(row, loadThumbnail, Modifier.fillMaxWidth().aspectRatio(THUMBNAIL_ASPECT))
-                    if (isSelected) {
-                        SelectedBadge(Modifier.align(Alignment.TopEnd).padding(4.dp))
+    val state = rememberLazyGridState()
+    Box(modifier.fillMaxSize()) {
+        LazyVerticalGrid(
+            // Adaptive rather than a fixed count: the same code gives three
+            // columns on a phone held upright and more on a tablet, without
+            // asking the width. See ARCHITECTURE.md for what sets the count.
+            columns = GridCells.Adaptive(minSize = GRID_MIN_CELL),
+            state = state,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            items(items, key = { it.id }) { row ->
+                val isSelected = row.id in selected
+                Column(
+                    modifier = Modifier.combinedClickable(
+                        onClick = { onClick(row) },
+                        onLongClick = { onLongClick(row) },
+                    ),
+                ) {
+                    Box {
+                        ThumbnailFrame(
+                            row,
+                            loadThumbnail,
+                            Modifier.fillMaxWidth().aspectRatio(THUMBNAIL_ASPECT),
+                        )
+                        if (isSelected) {
+                            SelectedBadge(Modifier.align(Alignment.TopEnd).padding(4.dp))
+                        }
                     }
+                    Text(
+                        text = row.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.Unspecified
+                        },
+                        modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
+                    )
                 }
-                Text(
-                    text = row.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Unspecified,
-                    modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
-                )
             }
         }
+        ScrollBar(state, Modifier.align(Alignment.CenterEnd))
     }
 }
 
