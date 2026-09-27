@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,7 +40,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.hyalos.player.R
 import com.hyalos.player.thumbnails.ThumbnailKey
 
@@ -127,10 +130,13 @@ fun EntryList(
 }
 
 /**
- * The same entries as tiles of thumbnails.
+ * The same entries as tiles of thumbnails, with the frame taking the space the
+ * list gives to a row's height.
  *
- * The second line is dropped here — it would crowd a tile — and the frame takes
- * the space instead, which is the point of this view.
+ * The size and the date come along too. They were dropped once, on the
+ * reasoning that they would crowd a tile — true at the width of a tile, but a
+ * library browsed by picture still wants to know how big a film is and when it
+ * was put there, and the answer costs one line of small text.
  */
 @Composable
 fun EntryGrid(
@@ -142,6 +148,13 @@ fun EntryGrid(
     modifier: Modifier = Modifier,
 ) {
     val state = rememberLazyGridState()
+    // Three lines of the two styles a tile's text uses: the name gets two, the
+    // size and date one. Reserved so that every tile is the same height however
+    // the name falls — see where it is applied.
+    val typography = MaterialTheme.typography
+    val tileTextHeight = with(LocalDensity.current) {
+        typography.bodySmall.lineHeight.toDp() * 2 + typography.labelSmall.lineHeight.toDp()
+    }
     Box(modifier.fillMaxSize()) {
         LazyVerticalGrid(
             // Adaptive rather than a fixed count: the same code gives three
@@ -172,18 +185,50 @@ fun EntryGrid(
                             SelectedBadge(Modifier.align(Alignment.TopEnd).padding(4.dp))
                         }
                     }
-                    Text(
-                        text = row.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            Color.Unspecified
-                        },
-                        modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
-                    )
+                    // The name and its size and date, in three lines' worth of
+                    // room however they fall: a two-line name puts the detail
+                    // on the third line, a one-line name on the second and
+                    // leaves the third empty. So tiles stay a uniform height,
+                    // and the detail stays against the name it belongs to —
+                    // which is why the spare line is kept at the bottom rather
+                    // than between them.
+                    Column(
+                        Modifier
+                            .padding(top = 6.dp, start = 2.dp, end = 2.dp)
+                            .heightIn(min = tileTextHeight),
+                    ) {
+                        Text(
+                            text = row.name,
+                            style = typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.Unspecified
+                            },
+                        )
+                        // One line, and it has to fit: "3.0 MB · 9/25/2026" is
+                        // the width of a tile to within a character or two, and
+                        // letting it wrap puts the size on one line and the date
+                        // on the next — which is not what the line is for.
+                        //
+                        // `labelSmall`'s letter spacing is what tips it over. It
+                        // is 0.5sp per character, meant to keep a short label
+                        // legible on its own; over seventeen characters of data
+                        // it is ~25px, which is the whole margin. Dropped rather
+                        // than the font size, so the text stays 11sp.
+                        row.detail?.let {
+                            Text(
+                                text = it,
+                                style = typography.labelSmall.copy(letterSpacing = 0.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(top = 2.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
