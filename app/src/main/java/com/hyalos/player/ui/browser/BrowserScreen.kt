@@ -1,14 +1,21 @@
 package com.hyalos.player.ui.browser
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,6 +30,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -43,15 +51,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
 import com.hyalos.player.data.BrowserLayout
@@ -106,6 +116,7 @@ fun BrowserScreen(
     BusyDialog(viewModel.busy)
     ReportSnackbar(viewModel, snackbar)
     PlaylistSnackbar(viewModel, snackbar)
+    NoticeSnackbar(viewModel, snackbar)
 
     Scaffold(
         topBar = {
@@ -173,6 +184,7 @@ fun BrowserScreen(
                     // not move you out of it, and the row is how you can see
                     // which directory you are narrowing.
                     Breadcrumbs(viewModel.path, viewModel.serverName, onJumpTo)
+                    CopyProgressRow(viewModel)
                 }
             }
         },
@@ -518,6 +530,63 @@ private fun ReportSnackbar(viewModel: BrowserViewModel, host: SnackbarHostState)
 }
 
 /** Confirms an add to the playlist, including what did not go in. */
+/**
+ * A copy is running: say so, and how far along.
+ *
+ * Sits under the breadcrumbs rather than over the list, because the list stays
+ * usable while a copy runs — the user may well be navigating to the folder they
+ * meant to paste into. The notification carries the same information for when
+ * the app is not on screen at all.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CopyProgressRow(viewModel: BrowserViewModel) {
+    val progress by viewModel.copyProgress.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // Asked for at the moment a copy starts rather than at launch. Android 13
+    // will not show the notification without it, and the notification is where
+    // the progress and the cancel button live — but a prompt about notifications
+    // on first run, before there is anything to notify about, is the kind of
+    // question people refuse without thinking.
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(progress != null) {
+        if (progress == null) return@LaunchedEffect
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@LaunchedEffect
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) ask.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    val current = progress ?: return
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(current.label, style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(4.dp))
+        val fraction = current.fraction
+        if (fraction == null) {
+            // Still counting what it is about to move. A bar at zero would read
+            // as stalled; a spinner reads as working.
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        } else {
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoticeSnackbar(viewModel: BrowserViewModel, host: SnackbarHostState) {
+    val notice = viewModel.notice ?: return
+    LaunchedEffect(notice) {
+        host.showSnackbar(notice)
+        viewModel.dismissNotice()
+    }
+}
+
 @Composable
 private fun PlaylistSnackbar(viewModel: BrowserViewModel, host: SnackbarHostState) {
     val notice = viewModel.playlistNotice ?: return

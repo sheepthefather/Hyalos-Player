@@ -5,6 +5,13 @@
     <!-- 底部栏。与各屏标题分开，因为两者的长度要求不同。 -->
     <string name="tab_servers">服务器</string>
     <string name="tab_playlists">播放列表</string>
+    <string name="copy_channel">文件复制</string>
+    <string name="copy_running">正在复制…</string>
+    <string name="copy_cancel">取消</string>
+    <string name="copy_progress">%1$s / %2$s</string>
+    <string name="copy_busy">已有复制在进行中</string>
+    <string name="copy_label">正在复制 %1$d 项</string>
+    <string name="copy_leftover">上次复制留下的残片挡住了：%1$s。删掉它再试。</string>
     <string name="tab_local">本地文件</string>
     <string name="local_permission_title">需要访问本机存储</string>
     <string name="local_permission_body">要浏览整台设备上的文件，这个应用需要「所有文件访问」权限。Android 没有为它准备确认弹窗，只能在系统设置里手动打开；授权后回到这里即可。</string>

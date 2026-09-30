@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -202,7 +203,23 @@ class BrowserViewModel(
 
     /** The last finished operation, for the report at the bottom of the screen. */
     var report by mutableStateOf<Report?>(null)
+
+    /**
+     * The copy running in the background, if any.
+     *
+     * Observed rather than owned: the operation belongs to `CopyCoordinator` and
+     * outlives this screen, so what is shown here is a view of something that
+     * would go on without it.
+     */
+    val copyProgress = container.copy.progress
+
+    /** A one-off line for the snackbar, for news that is not a file operation's result. */
+    var notice by mutableStateOf<String?>(null)
         private set
+
+    fun dismissNotice() {
+        notice = null
+    }
 
     /** The last add-to-playlist, for the confirmation at the bottom of the screen. */
     var playlistNotice by mutableStateOf<PlaylistNotice?>(null)
@@ -378,6 +395,36 @@ class BrowserViewModel(
             isDirectory = true,
         )
         val operation = if (content.mode == ClipboardMode.CUT) Operation.MOVE else Operation.COPY
+
+        // Two ways to do this, and which one applies is decided by whether the
+        // bytes have to come through here. Within one source they do not: the
+        // server copies, it is over in a moment, and the busy dialog below is
+        // the right amount of ceremony. Across sources they do, which takes
+        // minutes and must survive this screen being left — so it goes to the
+        // coordinator, which holds the process up and reports into the
+        // notification instead.
+        val acrossSources = content.items.any { it.serverId != serverId }
+        if (acrossSources) {
+            val label = container.appContext.getString(R.string.copy_label, content.items.size)
+            val started = container.copy.start(label) { report ->
+                val result = if (content.mode == ClipboardMode.CUT) {
+                    container.files.moveInto(content.items, target, report)
+                } else {
+                    container.files.copyInto(content.items, target, report)
+                }
+                container.clipboard.consumeIfCut()
+                // A leftover is the one failure the report's own wording cannot
+                // carry: "1 failed" says nothing about the file the user has to
+                // delete before trying again, and naming it is the whole point.
+                result.failures.firstNotNullOfOrNull { it.leftover }?.let {
+                    notice = container.appContext.getString(R.string.copy_leftover, it)
+                }
+                result
+            }
+            if (!started) notice = container.appContext.getString(R.string.copy_busy)
+            return
+        }
+
         run(operation) {
             val result = if (content.mode == ClipboardMode.CUT) {
                 container.files.moveInto(content.items, target)
@@ -521,6 +568,28 @@ class BrowserViewModel(
                 } else {
                     ""
                 }
+        }
+
+        // A cross-source paste is run by the coordinator, not by this screen,
+        // and can outlive it — so `paste` has nothing to await and cannot
+        // reload when the copy lands. The usual case is that it landed in the
+        // very directory on screen, which would otherwise keep showing the
+        // listing from before it arrived until the user left and came back.
+        //
+        // Watching the coordinator is the signal that is actually available.
+        // Only the fall from running to not is acted on: the first emission is
+        // `null` on any screen opened while nothing is copying, and reloading
+        // for that would be a second listing of the same directory on arrival.
+        viewModelScope.launch {
+            var wasRunning = false
+            copyProgress.collect { progress ->
+                if (progress != null) {
+                    wasRunning = true
+                } else if (wasRunning) {
+                    wasRunning = false
+                    load(refresh = true)
+                }
+            }
         }
 
         // Re-order whenever the listing or the sort preference changes. This is

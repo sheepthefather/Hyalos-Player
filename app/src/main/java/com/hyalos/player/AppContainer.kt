@@ -5,6 +5,7 @@ import com.hyalos.player.data.CredentialStore
 import com.hyalos.player.data.PlaylistRepository
 import com.hyalos.player.data.ServerRepository
 import com.hyalos.player.data.SettingsRepository
+import com.hyalos.player.files.CopyCoordinator
 import com.hyalos.player.files.FileClipboard
 import com.hyalos.player.files.FileOperations
 import com.hyalos.player.files.KernelFileSession
@@ -64,6 +65,13 @@ class AppContainer(context: Context) {
     val thumbnails = ThumbnailLoader(thumbnailCache, thumbnailLanes)
 
     val clipboard = FileClipboard()
+
+    /**
+     * The copy that is running, if one is. Application-scoped for the same reason
+     * the clipboard is: an operation that outlives the screen that began it has to
+     * live somewhere the screen cannot take with it.
+     */
+    val copy = CopyCoordinator(appContext, appScope)
 
     /**
      * File operations get a connection of their own, never the browsing one.

@@ -31,6 +31,27 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <!--
+      A copy between two sources is carried through this process, one chunk at a
+      time, and can run for minutes. Without a foreground service the process is
+      cached while it works and the system may reclaim it at any point — which
+      does not merely fail the copy, it stops it half way with a partly-written
+      file on the destination.
+
+      `dataSync` is the type that describes this: moving the user's files. It has
+      to be declared as well as the permission, and Android 14 requires the
+      declaration to match the permission.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!--
+      Needed from API 33 for the notification to be *seen*. The service runs
+      either way, so a refusal costs the progress bar and the cancel button, not
+      the protection.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".HyalosApp"
         android:allowBackup="true"
@@ -68,6 +89,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Exists to hold the process up while a copy runs, and to be the place the
+          progress bar lives. The work itself belongs to `CopyCoordinator`, which
+          is process-wide: a service can be restarted and an activity can be
+          destroyed, and neither should decide whether a copy continues.
+        -->
+        <service
+            android:name=".files.CopyService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>
