@@ -1,6 +1,7 @@
 package com.hyalos.player.kernel
 
 import com.hyalos.player.data.CredentialStore
+import com.hyalos.player.data.LocalSource
 import com.hyalos.player.data.ServerConfig
 import com.hyalos.player.data.ServerRepository
 import kotlinx.coroutines.CoroutineScope
@@ -51,7 +52,7 @@ class SessionManager(
         withBrowseSession(serverId) { it.list(path) }
 
     /** A session the caller owns and must [shutdown]. */
-    suspend fun connectDedicated(serverId: String): Session = connect(request(server(serverId)))
+    suspend fun connectDedicated(serverId: String): Session = connect(requestFor(serverId))
 
     /**
      * Connect with settings that are not saved yet, list [ServerConfig.startPath],
@@ -108,11 +109,38 @@ class SessionManager(
         // otherwise both authenticate and one session would leak.
         locks.getOrPut(serverId) { Mutex() }.withLock {
             sessions[serverId]?.takeUnless { it.isClosed() }
-                ?: connect(request(server(serverId))).also { sessions[serverId] = it }
+                ?: connect(requestFor(serverId)).also { sessions[serverId] = it }
         }
 
     private suspend fun server(serverId: String): ServerConfig =
         servers.get(serverId) ?: throw ServerNotFoundException(serverId)
+
+    /**
+     * The connect request for a source id, whether that is a server or the
+     * device itself.
+     *
+     * This is the whole of what the local-files tab costs this layer. The
+     * kernel's `file:` backend implements the same operations as its SMB one, so
+     * a local directory is just a session with a local endpoint — listing,
+     * stat, reading, renaming and deleting all go down the same path, and
+     * nothing above here has to know which kind it is holding.
+     */
+    private suspend fun requestFor(serverId: String): ConnectRequest =
+        if (serverId == LocalSource.ID) {
+            ConnectRequest(
+                uri = LocalSource.uri,
+                // No server, so nothing to authenticate to and nothing to ask
+                // for on the wire. The password field stays null rather than
+                // empty: there is no credential store entry to consult, and
+                // asking for one would throw.
+                username = null,
+                password = null,
+                domain = null,
+                smbSeal = false,
+            )
+        } else {
+            request(server(serverId))
+        }
 
     /**
      * The connect request for [server]. Never log the result: it is a data

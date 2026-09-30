@@ -9,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.BrowserLayout
+import com.hyalos.player.R
+import com.hyalos.player.data.LocalSource
 import com.hyalos.player.data.SortKey
 import com.hyalos.player.files.ClipboardContent
 import com.hyalos.player.files.ClipboardMode
@@ -508,7 +510,18 @@ class BrowserViewModel(
     private var job: Job? = null
 
     init {
-        viewModelScope.launch { serverName = container.servers.get(serverId)?.name.orEmpty() }
+        viewModelScope.launch {
+            // A source with no server still needs a name: the title falls back
+            // to it for a path with nothing to name (the root), and the
+            // breadcrumb shows it as the first crumb. The local tab would
+            // otherwise be a browser with a blank title and a nameless root.
+            serverName = container.servers.get(serverId)?.name
+                ?: if (serverId == LocalSource.ID) {
+                    container.appContext.getString(R.string.tab_local)
+                } else {
+                    ""
+                }
+        }
 
         // Re-order whenever the listing or the sort preference changes. This is
         // the only place `State.Loaded` is produced, so the two can never

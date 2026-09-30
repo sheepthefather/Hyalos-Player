@@ -66,4 +66,15 @@ sealed interface Route : NavKey {
     /** One server's playlist. The list belongs to a server, so the id is the key. */
     @Serializable
     data class Playlist(val serverId: String) : Route
+
+    /**
+     * The local-files tab's root: the device's own storage.
+     *
+     * A root of its own for the same reason [Playlists] is one — each tab keeps
+     * its back stack — but also because this is where the storage permission is
+     * asked about. Directories below it are ordinary [Browse] entries carrying
+     * `LocalSource.ID`, so there is no second browser.
+     */
+    @Serializable
+    data object Local : Route
 }

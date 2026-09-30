@@ -72,8 +72,12 @@ fun BrowserScreen(
     onOpenDirectory: (path: String) -> Unit,
     onPlay: (path: String) -> Unit,
     onJumpTo: (path: String) -> Unit,
-    onEditServer: () -> Unit,
-    onBack: () -> Unit,
+    // Null where there is nothing to go back to and no server to edit: the
+    // local tab's root, which is the browser itself and belongs to no server.
+    // Hiding an action that would do nothing beats leaving a button that
+    // silently does nothing.
+    onEditServer: (() -> Unit)?,
+    onBack: (() -> Unit)?,
 ) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -122,8 +126,13 @@ fun BrowserScreen(
                     TopAppBar(
                         title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
+                            onBack?.let {
+                                IconButton(onClick = it) {
+                                    Icon(
+                                        painterResource(R.drawable.ic_arrow_back),
+                                        stringResource(R.string.back),
+                                    )
+                                }
                             }
                         },
                         actions = {

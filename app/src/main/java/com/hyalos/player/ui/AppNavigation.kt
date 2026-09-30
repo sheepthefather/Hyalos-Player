@@ -36,6 +36,8 @@ import com.hyalos.player.AppContainer
 import com.hyalos.player.R
 import com.hyalos.player.ui.browser.BrowserScreen
 import com.hyalos.player.ui.browser.BrowserViewModel
+import com.hyalos.player.data.LocalSource
+import com.hyalos.player.ui.local.LocalScreen
 import com.hyalos.player.ui.player.PlayerScreen
 import com.hyalos.player.ui.player.PlayerViewModel
 import com.hyalos.player.ui.playlist.PlaylistScreen
@@ -55,7 +57,7 @@ import com.hyalos.player.ui.settings.StorageSettingsScreen
 import com.hyalos.player.ui.settings.StorageSettingsViewModel
 
 /** Which half of the app the bottom bar is showing. */
-private enum class Tab { Servers, Playlists }
+private enum class Tab { Servers, Playlists, Local }
 
 /**
  * How long one screen takes to become another, in milliseconds.
@@ -81,17 +83,29 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.screenFade(): ContentT
 @Composable
 fun AppNavigation(container: AppContainer) {
     // One back stack per tab, so switching leaves each where it was rather than
-    // unwinding it. Both are saved, so process death restores both.
+    // unwinding it. All three are saved, so process death restores all three.
     val servers = rememberNavBackStack(Route.Servers)
     val playlists = rememberNavBackStack(Route.Playlists)
+    // The local tab's root is the browser itself: there is no list of local
+    // sources to choose from, because there is one device.
+    val local = rememberNavBackStack(Route.Local)
     var tab by rememberSaveable { mutableStateOf(Tab.Servers) }
 
-    val active = if (tab == Tab.Servers) servers else playlists
+    val active = when (tab) {
+        Tab.Servers -> servers
+        Tab.Playlists -> playlists
+        Tab.Local -> local
+    }
 
-    // Back out of the second tab lands on the first, as it does everywhere else
+    // Back out of a tab root lands on the servers tab, as it does everywhere else
     // on the platform. NavDisplay's own handler stands aside while a stack holds
     // only its root — which is what lets back reach the activity and close the
-    // app from the first tab — so this one case has to be said explicitly.
+    // app from the servers tab — so this one case has to be said explicitly.
+    //
+    // The destination is the servers tab rather than whichever tab is leftmost,
+    // and the app still opens on it. `Local` is first because it is the one
+    // reached for most, not because it is home: it is also the one that can open
+    // on a permission page, which is a poor thing to greet somebody with.
     BackHandler(enabled = tab != Tab.Servers && active.size == 1) { tab = Tab.Servers }
 
     Scaffold(
@@ -100,6 +114,12 @@ fun AppNavigation(container: AppContainer) {
             // whole screen, and the player hides the system bars besides.
             if (active.size == 1) {
                 NavigationBar {
+                    NavigationBarItem(
+                        selected = tab == Tab.Local,
+                        onClick = { tab = Tab.Local },
+                        icon = { Icon(painterResource(R.drawable.ic_storage), null) },
+                        label = { Text(stringResource(R.string.tab_local)) },
+                    )
                     NavigationBarItem(
                         selected = tab == Tab.Servers,
                         onClick = { tab = Tab.Servers },
@@ -129,6 +149,7 @@ fun AppNavigation(container: AppContainer) {
         when (tab) {
             Tab.Servers -> RouteStack(servers, container, room)
             Tab.Playlists -> RouteStack(playlists, container, room)
+            Tab.Local -> RouteStack(local, container, room)
         }
     }
 }
@@ -170,6 +191,23 @@ private fun RouteStack(
                     onAdd = { backStack.add(Route.EditServer()) },
                     onEdit = { backStack.add(Route.EditServer(it.id)) },
                     onOpenSettings = { backStack.add(Route.Settings) },
+                )
+            }
+            entry<Route.Local> {
+                LocalScreen(
+                    // The session's own root is "/" — LocalSource.root only
+                    // decides which directory the kernel is pointed at, and the
+                    // paths on this stack are relative to it, exactly as a
+                    // server's share is.
+                    viewModel = viewModel {
+                        BrowserViewModel(container, LocalSource.ID, "/")
+                    },
+                    onOpenDirectory = { backStack.add(Route.Browse(LocalSource.ID, it)) },
+                    onPlay = { backStack.add(Route.Play(LocalSource.ID, it)) },
+                    onJumpTo = {
+                        val target = Route.Browse(LocalSource.ID, it)
+                        backStack.replaceWith(jumpTo(backStack.filterIsInstance<Route>(), target))
+                    },
                 )
             }
             entry<Route.Playlists> {

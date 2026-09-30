@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!--
       SMB is a network protocol, so the app is useless without this. While
@@ -9,6 +10,26 @@
       native sockets too. See ARCHITECTURE.md.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      The local-files tab browses the device's own storage, and this is what lets
+      it see past the app's sandbox to do so.
+
+      A broad permission, granted deliberately: the app is a file browser for
+      media the user already owns, and the alternatives do not reach far enough.
+      Scoped storage's own picker (`ACTION_OPEN_DOCUMENT_TREE`) cannot select the
+      root of shared storage or the Download folder — Android 11 made that
+      impossible — so a folder-picking app could never show the whole device.
+      Google Play restricts this permission to file managers; this app is
+      distributed as an APK, so that does not apply.
+
+      Not a runtime permission: there is no dialog for it. The user turns it on
+      on a settings screen the app sends them to, which is why `LocalSource`
+      checks rather than requests. See ARCHITECTURE.md.
+    -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <application
         android:name=".HyalosApp"

@@ -19,19 +19,26 @@ import com.hyalos.player.R
 fun UiError.text(): String =
     if (arg == null) stringResource(message) else stringResource(message, arg)
 
-/** A full-screen error with the action [UiError] suggests. */
+/**
+ * A full-screen error with the action [UiError] suggests.
+ *
+ * [onEditServer] is null where there is no server to edit — the local tab, whose
+ * source is the device. The button belongs to the action rather than to the
+ * error, so a null one simply means the action is not offered.
+ */
 @Composable
 fun ErrorState(
     error: UiError,
     onRetry: () -> Unit,
-    onEditServer: () -> Unit,
+    onEditServer: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     CenteredMessage(error.text(), modifier) {
         when (error.action) {
             UiError.Action.RETRY -> Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
-            UiError.Action.EDIT_SERVER ->
-                Button(onClick = onEditServer) { Text(stringResource(R.string.action_edit_server)) }
+            UiError.Action.EDIT_SERVER -> onEditServer?.let {
+                Button(onClick = it) { Text(stringResource(R.string.action_edit_server)) }
+            }
             UiError.Action.NONE -> {}
         }
     }
