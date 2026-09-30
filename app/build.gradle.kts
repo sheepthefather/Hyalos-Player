@@ -12,6 +12,15 @@
 val krystallosDir: String = (findProperty("krystallos.dir") as String?)
     ?: rootProject.projectDir.resolve("vendor/krystallos").absolutePath
 
+/**
+ * The API level the Rust kernel is compiled against.
+ *
+ * Read from `minSdk` rather than written out, so the two cannot drift: a
+ * library linked against an older libc than the app claims to support is the
+ * failure this exists to prevent, and it is silent.
+ */
+val androidApiLevel: String = libs.versions.minSdk.get()
+
 plugins {
     alias(libs.plugins.android.application)
     // No Kotlin Android plugin: AGP 9 compiles Kotlin itself and the standalone
@@ -170,9 +179,18 @@ val buildRust = tasks.register<BuildRust>("buildRust") {
         "-t", "arm64-v8a",
         "-t", "armeabi-v7a",
         "-t", "x86_64",
-        "-P", "29",
+        "-P", androidApiLevel,
         "-o", rustJniLibsDir.get().asFile.absolutePath,
         "build", "--release",
+        // A target directory per API level, and this is the part that makes the
+        // rebuild actually happen. `-P` changes the linker cargo is told to use,
+        // but that alone does not invalidate its cache: measured, after raising
+        // `minSdk`, `cargo ndk -P 30` finished in 0.03 seconds and cargo-ndk
+        // copied the API-29 libraries straight through. Declaring the level as a
+        // Gradle input only reruns the *task*; cargo still decides for itself
+        // whether there is anything to do. A directory per level puts the answer
+        // out of its hands, at the cost of one full rebuild when the level moves.
+        "--target-dir", file("$krystallosDir/target/android-$androidApiLevel").absolutePath,
         "-p", "krystallos-ffi",
     )
 
@@ -192,6 +210,10 @@ val buildRust = tasks.register<BuildRust>("buildRust") {
     // byte-identical whether the kernel was built from a sibling checkout or
     // from `vendor/`, because `strip = "debuginfo"` removes the path-dependent
     // debug info. Moving the checkout should not force a rebuild.
+    // An input like the sources are, so that raising `minSdk` reruns this task.
+    // It is not sufficient on its own — see the target directory below.
+    inputs.property("androidApiLevel", androidApiLevel)
+
     inputs.files(
         fileTree(krystallosDir) {
             include("Cargo.toml", "Cargo.lock")

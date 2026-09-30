@@ -97,7 +97,7 @@ implementation(variantOf(libs.jna) { artifactType("aar") })
 
 生成的绑定通过 JNA 的 direct mapping 加载 Rust 库，而 jar 里没有 `libjnidispatch.so`，用它会得到一个运行时的 `UnsatisfiedLinkError`——错误信息既不提 JNA 也不提变体问题。
 
-**3. `cargo ndk` 的 `-P 29` 不能省。** 它默认按 API 21 构建，低于本项目 minSdk，产出的库会链接到更老的 libc。
+**3. `cargo ndk` 的 `-P` 不能省。** 它默认按 API 21 构建，低于本项目 minSdk，产出的库会链接到更老的 libc。这个数跟着 `minSdk` 走——现在两边都是 30，抬 minSdk 时必须一起动。
 
 **4. release 构建不要 `strip = true`。** UniFFI 的元数据符号是只读数据、不在 `.dynsym` 里，完整 strip 会连 `.symtab` 一起移除，于是 `uniffi-bindgen` 在**真正要发布的产物**上报 `No UniFFI metadata found`，而 debug 构建却正常。内核的 release profile 用 `strip = "debuginfo"`。
 

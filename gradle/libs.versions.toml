@@ -11,7 +11,7 @@ kotlin = "2.4.20"
 # `targetSdk`, which is what opts the app into new runtime behaviour, so
 # compiling against 37 does not change how the app behaves on older devices.
 compileSdk = "37"
-minSdk = "29"
+minSdk = "30"
 targetSdk = "36"
 
 # Compose. The BOM pins every androidx.compose.* artifact to a mutually tested
