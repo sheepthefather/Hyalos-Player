@@ -2,6 +2,7 @@ package com.hyalos.player.files
 
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.kernel.shutdown
+import uniffi.krystallos_ffi.OpenFlags
 import uniffi.krystallos_ffi.KernelException
 
 /**
@@ -107,7 +108,24 @@ class FileOperations(private val connect: suspend (serverId: String) -> OpenSess
      * Used for both paste-a-copy and the cross-server half of a move; the caller
      * deletes the sources afterwards in the second case.
      */
-    suspend fun copyInto(targets: List<RemoteItem>, targetDirectory: RemoteItem): OperationResult =
+    suspend fun copyInto(
+        targets: List<RemoteItem>,
+        targetDirectory: RemoteItem,
+        onProgress: ((copied: ULong, total: ULong) -> Unit)? = null,
+    ): OperationResult {
+        // Both ends on one machine means the *server* can do this, instantly and
+        // without the bytes coming here at all. Anything else has to be carried,
+        // because neither end can see the other — see `copyAcross`.
+        if (targets.any { it.serverId != targetDirectory.serverId }) {
+            return copyAcross(targets, targetDirectory, onProgress)
+        }
+        return copyWithin(targets, targetDirectory)
+    }
+
+    private suspend fun copyWithin(
+        targets: List<RemoteItem>,
+        targetDirectory: RemoteItem,
+    ): OperationResult =
         withSession(targets) { session, result ->
             for (target in targets) {
                 val destination = RemotePath.join(targetDirectory.path, target.name)
@@ -128,7 +146,11 @@ class FileOperations(private val connect: suspend (serverId: String) -> OpenSess
      * delete — and the delete only runs for the items whose copy succeeded, so
      * a failure never destroys the only copy.
      */
-    suspend fun moveInto(targets: List<RemoteItem>, targetDirectory: RemoteItem): OperationResult {
+    suspend fun moveInto(
+        targets: List<RemoteItem>,
+        targetDirectory: RemoteItem,
+        onProgress: ((copied: ULong, total: ULong) -> Unit)? = null,
+    ): OperationResult {
         val sameServer = targets.all { it.serverId == targetDirectory.serverId }
 
         if (sameServer) {
@@ -151,7 +173,7 @@ class FileOperations(private val connect: suspend (serverId: String) -> OpenSess
         }
 
         // Different servers: copy first, and only delete what actually arrived.
-        val copied = copyInto(targets, targetDirectory)
+        val copied = copyInto(targets, targetDirectory, onProgress)
         val arrived = targets.filter { target ->
             if (copied.conflicts.contains(target.name)) return@filter false
             // A failure *anywhere* in the tree means the copy is incomplete, so
@@ -266,6 +288,175 @@ class FileOperations(private val connect: suspend (serverId: String) -> OpenSess
         }
     }
 
+    /**
+     * Copy between two sources, carrying the bytes through this process.
+     *
+     * A server can copy within itself and nothing else: when the clipboard holds
+     * something from one machine and the paste lands on another, no single
+     * session can see both ends. This app is the only thing that can, so the
+     * bytes come here, at the cost of the transfer being twice as long as the
+     * network path between the two.
+     *
+     * **Every file is written under a temporary name and renamed once it has
+     * arrived.** A copy that dies half way therefore never leaves a file wearing
+     * the real name — which is the failure that matters, because a half file
+     * with a right-looking name is worse than an obviously broken one: it plays
+     * for a while and then stops, and the next paste collides with it. The
+     * leftover is named `<name>.hyalos-part`, stays visible, and is refused
+     * rather than overwritten if the same file is copied again.
+     */
+    private suspend fun copyAcross(
+        targets: List<RemoteItem>,
+        targetDirectory: RemoteItem,
+        onProgress: ((ULong, ULong) -> Unit)?,
+    ): OperationResult {
+        val result = OperationResult()
+        val total = if (onProgress == null) 0uL else sizeOf(targets, targets.first().serverId)
+        var copied = 0uL
+
+        withSession(targets.first().serverId) { source ->
+            withSession(targetDirectory.serverId) { destination ->
+                for (target in targets) {
+                    val to = RemotePath.join(targetDirectory.path, target.name)
+                    if (exists(destination, to)) {
+                        result.recordConflict(target.name)
+                        continue
+                    }
+                    copyAcrossTree(source, destination, target.path, to, target.isDirectory, result) {
+                        copied += it
+                        onProgress?.invoke(copied, total)
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    private suspend fun copyAcrossTree(
+        source: FileSession,
+        destination: FileSession,
+        from: String,
+        to: String,
+        sourceIsDirectory: Boolean,
+        result: OperationResult,
+        onBytes: (ULong) -> Unit,
+    ) {
+        data class Work(val from: String, val to: String, val isDirectory: Boolean)
+
+        val pending = ArrayDeque<Work>()
+        pending += Work(from, to, sourceIsDirectory)
+
+        while (pending.isNotEmpty()) {
+            val work = pending.removeFirst()
+            if (!work.isDirectory) {
+                runCatching { streamFile(source, destination, work.from, work.to, onBytes) }
+                    .onSuccess { result.succeeded++ }
+                    .onFailure { result.recordFailure(work.from, it) }
+                continue
+            }
+
+            val entries = try {
+                source.list(work.from)
+            } catch (e: Exception) {
+                result.recordFailure(work.from, e)
+                continue
+            }
+            try {
+                destination.mkdir(work.to)
+                result.succeeded++
+            } catch (e: Exception) {
+                result.recordFailure(work.to, e)
+                continue
+            }
+            for (entry in entries) {
+                pending += Work(
+                    from = RemotePath.join(work.from, entry.name),
+                    to = RemotePath.join(work.to, entry.name),
+                    isDirectory = entry.isDirectory,
+                )
+            }
+        }
+    }
+
+    /** One file, streamed. Returns the bytes written. */
+    private suspend fun streamFile(
+        source: FileSession,
+        destination: FileSession,
+        from: String,
+        to: String,
+        onBytes: (ULong) -> Unit,
+    ): ULong {
+        val temporary = "$to$PARTIAL_SUFFIX"
+        val input = source.open(from, READ_ONLY)
+        try {
+            val output = try {
+                // `create_new` rather than a check-then-write, so that a leftover
+                // from an earlier failure is refused by the same call that would
+                // otherwise race with a second paste of the same file. The server
+                // arbitrates; we only translate the refusal.
+                destination.open(temporary, WRITE_NEW)
+            } catch (e: KernelException.AlreadyExists) {
+                throw PartialFileInTheWayException(temporary)
+            }
+            var written = 0uL
+            try {
+                while (true) {
+                    val chunk = input.read(written, COPY_CHUNK)
+                    if (chunk.isEmpty()) break
+                    var offered = 0
+                    while (offered < chunk.size) {
+                        val n = output.write(written + offered.toULong(), chunk.copyOfRange(offered, chunk.size))
+                        if (n <= 0) throw java.io.IOException("short write at $written on $temporary")
+                        offered += n
+                    }
+                    written += chunk.size.toULong()
+                    onBytes(chunk.size.toULong())
+                }
+            } finally {
+                output.release()
+            }
+            // Only now does it earn the real name.
+            destination.rename(temporary, to)
+            return written
+        } finally {
+            input.release()
+        }
+    }
+
+    /**
+     * What the whole copy will move, for a progress bar.
+     *
+     * Walked before anything is written, because a total that appears half way
+     * through is not a total. Metadata only — no bytes — but it is a full pass
+     * over the tree, which is the price of showing a proportion rather than a
+     * count that means nothing on its own.
+     */
+    private suspend fun sizeOf(targets: List<RemoteItem>, serverId: String): ULong {
+        data class Work(val path: String, val isDirectory: Boolean)
+
+        var total = 0uL
+        val pending = ArrayDeque<Work>()
+        targets.forEach { pending += Work(it.path, it.isDirectory) }
+
+        withSession(serverId) { session ->
+            while (pending.isNotEmpty()) {
+                val work = pending.removeFirst()
+                if (!work.isDirectory) {
+                    // A stat that fails is not worth failing the copy over: the
+                    // total is a courtesy, and the copy itself will report
+                    // whatever is really wrong.
+                    runCatching { total += session.stat(work.path).len.toULong() }
+                    continue
+                }
+                val entries = runCatching { session.list(work.path) }.getOrNull() ?: continue
+                for (entry in entries) {
+                    pending += Work(RemotePath.join(work.path, entry.name), entry.isDirectory)
+                }
+            }
+        }
+        return total
+    }
+
     private suspend fun exists(session: FileSession, path: String): Boolean =
         try {
             session.stat(path)
@@ -309,8 +500,60 @@ class FileOperations(private val connect: suspend (serverId: String) -> OpenSess
         override suspend fun removeDir(path: String) = Unit
         override suspend fun rename(from: String, to: String) = Unit
         override suspend fun copy(from: String, to: String): ULong = 0uL
+        override suspend fun open(path: String, flags: OpenFlags): FileHandle =
+            throw KernelException.NotFound(path)
     }
 }
 
 /** Something with that name is already there. */
 class DestinationExistsException(val path: String) : Exception("already exists: $path")
+
+/**
+ * A copy that died earlier left its half-written file where this one needs to
+ * write.
+ *
+ * Its own type rather than a plain failure because the message has to say
+ * something a generic "already exists" cannot: the file it names is not the one
+ * the user asked to create, and deleting it is a decision only they can make.
+ */
+class PartialFileInTheWayException(val path: String) :
+    Exception("an unfinished copy is in the way: $path")
+
+/**
+ * What a half-written file is called until it is whole.
+ *
+ * Suffixed rather than prefixed so it sorts beside the file it will become, and
+ * carrying the app's name so that it cannot be mistaken for the user's own file
+ * — the app deletes and refuses things under this name, and it may only do that
+ * to files it is certain it made.
+ *
+ * Not a video extension, so a leftover cannot be tapped and played as though it
+ * were finished.
+ */
+private const val PARTIAL_SUFFIX = ".hyalos-part"
+
+/**
+ * Open an existing file for reading.
+ *
+ * Written out rather than taken from `OpenFlags.read_only()`: uniffi generates
+ * the record's constructor, not the helpers written beside it in Rust.
+ */
+private val READ_ONLY = OpenFlags(
+    read = true,
+    write = false,
+    create = false,
+    createNew = false,
+    truncate = false,
+)
+
+/** Write-only and new: the server refuses rather than replaces. */
+private val WRITE_NEW = OpenFlags(
+    read = false,
+    write = true,
+    create = true,
+    createNew = true,
+    truncate = false,
+)
+
+/** 1 MiB. One SMB read and one write per chunk, small enough to report progress often. */
+private const val COPY_CHUNK = 1 shl 20

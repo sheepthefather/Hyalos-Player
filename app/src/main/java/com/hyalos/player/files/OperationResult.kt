@@ -15,13 +15,24 @@ data class OperationResult(
     /** Names skipped because something with that name was already there. */
     val conflicts: MutableList<String> = mutableListOf(),
 ) {
-    data class Failure(val path: String, val reason: String)
+    /**
+     * [leftover] is set when the failure was an unfinished copy standing in the
+     * way, and names it. A field of its own rather than something read back out
+     * of [reason], because [reason] is the operation's own wording — English,
+     * and written for a log — while this has to reach the user in their
+     * language, naming the one file they need to deal with.
+     */
+    data class Failure(val path: String, val reason: String, val leftover: String? = null)
 
     /** Whether anything was skipped or failed, and so is worth telling the user about. */
     val hasProblems: Boolean get() = failures.isNotEmpty() || conflicts.isNotEmpty()
 
     fun recordFailure(path: String, error: Throwable) {
-        failures += Failure(path, error.message ?: error::class.simpleName ?: "failed")
+        failures += Failure(
+            path = path,
+            reason = error.message ?: error::class.simpleName ?: "failed",
+            leftover = (error as? PartialFileInTheWayException)?.path,
+        )
     }
 
     fun recordConflict(path: String) {

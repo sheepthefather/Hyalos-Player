@@ -2,6 +2,8 @@ package com.hyalos.player.files
 
 import uniffi.krystallos_ffi.EntryMetadata
 import uniffi.krystallos_ffi.Kind
+import uniffi.krystallos_ffi.OpenFlags
+import uniffi.krystallos_ffi.RemoteFile
 import uniffi.krystallos_ffi.Session
 
 /**
@@ -44,6 +46,35 @@ interface FileSession {
 
     /** Bytes copied. Server-side where the protocol allows it. */
     suspend fun copy(from: String, to: String): ULong
+
+    /**
+     * Open a file so its bytes can pass through this process.
+     *
+     * The other operations here are answered by the server. This one is what
+     * makes a copy between *two* sources possible at all: neither server can
+     * see the other, so somebody has to carry the bytes, and the only thing
+     * that can see both is this app. `copy` stays the fast path for the case
+     * where both ends are the same machine.
+     */
+    suspend fun open(path: String, flags: OpenFlags): FileHandle
+}
+
+/**
+ * A file open across a copy.
+ *
+ * Deliberately narrow: read, write, release. Everything else a file can do —
+ * seeking, truncating, appending — is machinery a straight copy does not need,
+ * and each addition is another thing a backend has to get right.
+ */
+interface FileHandle {
+    /** Up to [len] bytes at [offset]. An empty array means end of file. */
+    suspend fun read(offset: ULong, len: Int): ByteArray
+
+    /** Bytes actually written, which may be fewer than were offered. */
+    suspend fun write(offset: ULong, data: ByteArray): Int
+
+    /** Close. Harmless to call twice. */
+    suspend fun release()
 }
 
 /** A directory entry as the file operations need it: a name and whether it is a folder. */
@@ -67,4 +98,23 @@ class KernelFileSession(private val session: Session) : FileSession {
     override suspend fun rename(from: String, to: String) = session.rename(from, to)
 
     override suspend fun copy(from: String, to: String): ULong = session.copy(from, to)
+
+    override suspend fun open(path: String, flags: OpenFlags): FileHandle =
+        KernelFileHandle(session.open(path, flags))
+}
+
+/** A [RemoteFile] on the kernel's terms, narrowed to what [FileHandle] promises. */
+class KernelFileHandle(private val file: RemoteFile) : FileHandle {
+    override suspend fun read(offset: ULong, len: Int): ByteArray =
+        file.readAt(offset, len.toUInt()).data
+
+    override suspend fun write(offset: ULong, data: ByteArray): Int =
+        file.writeAt(offset, data).toInt()
+
+    override suspend fun release() {
+        // A failed close is not worth propagating: the handle is going away
+        // either way, and the copy it belonged to has already succeeded or
+        // already failed on its own terms.
+        runCatching { file.release() }
+    }
 }
