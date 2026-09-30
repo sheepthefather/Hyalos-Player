@@ -328,7 +328,7 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **粘贴后目标目录靠订阅进度来刷新。** 跨来源那条分支不能 `await`（复制跑在别的协程里、结果只进通知栏），所以它没有可以 `load(refresh = true)` 的时机，一度要离开目录再回来才看得到粘贴结果。现在订阅 coordinator 的进度，只在它**从「在跑」掉回 `null`** 时重列——首次发射就是 `null`，那时候重载等于把同一个目录白列一遍。
 
-**验证写入类功能必须用可写的共享。** 本项目手工搭的 `media` 共享是 `read only = yes`，服务端用 `ACCESS_DENIED` 拒绝创建，症状是复制「瞬间失败」——前台服务随即被自己的 `finally` 拆掉，日志里留下 `Stop FGS timeout` 和 `does not have any types` 两行极具误导性的噪声。查了很久才想到去看共享配置。**失败原因一直在 `OperationResult` 里写着**，看不见只是因为探针放在了操作之后——抛异常时那行日志根本不会执行。**探针要放在操作之前，或者包在 catch 里。**
+**验证写入类功能必须用可写的共享。** 本项目手工搭的 `media` 共享一度是 `read only = yes`（2026-09-30 已改为 `read only = no`，原件备份在 `/etc/samba/smb.conf.bak-20260930`），服务端用 `ACCESS_DENIED` 拒绝创建，症状是复制「瞬间失败」——前台服务随即被自己的 `finally` 拆掉，日志里留下 `Stop FGS timeout` 和 `does not have any types` 两行极具误导性的噪声。查了很久才想到去看共享配置。**失败原因一直在 `OperationResult` 里写着**，看不见只是因为探针放在了操作之后——抛异常时那行日志根本不会执行。**探针要放在操作之前，或者包在 catch 里。**
 
 ### 播放器里的「视频信息」
 
