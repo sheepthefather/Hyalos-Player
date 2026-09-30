@@ -89,6 +89,13 @@
 
     <!-- 浏览 -->
     <string name="browser_empty">空文件夹</string>
+    <string name="browser_search">搜索</string>
+    <string name="browser_search_hint">在当前目录中搜索</string>
+    <string name="browser_search_close">关闭搜索</string>
+    <string name="browser_search_clear">清空</string>
+    <string name="browser_search_regex">正则表达式</string>
+    <string name="browser_search_no_matches">没有匹配项</string>
+    <string name="browser_search_invalid">正则表达式无效：%1$s</string>
     <string name="browser_switch_to_grid">切换到网格视图</string>
     <string name="browser_switch_to_list">切换到列表视图</string>
     <string name="browser_sort">排序</string>

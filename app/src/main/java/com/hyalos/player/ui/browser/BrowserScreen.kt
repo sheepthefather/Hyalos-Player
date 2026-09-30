@@ -19,6 +19,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -29,6 +30,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -40,8 +43,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +84,10 @@ fun BrowserScreen(
     val sortAscending by viewModel.sortAscending.collectAsStateWithLifecycle()
     val clipboard by viewModel.clipboard.collectAsStateWithLifecycle()
     val grid = layout == BrowserLayout.GRID
+    val searching by viewModel.searching.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val regexSearch by viewModel.regexSearch.collectAsStateWithLifecycle()
+    val search by viewModel.search.collectAsStateWithLifecycle()
 
     // While something is selected, back means "leave selection mode". Without
     // this it climbs out of the directory instead, taking the selection with it
@@ -97,6 +109,16 @@ fun BrowserScreen(
                 if (viewModel.selecting) {
                     SelectionBar(viewModel)
                 } else {
+                    if (searching) {
+                        SearchField(
+                            query = query,
+                            regex = regexSearch,
+                            broken = search is EntrySearch.Broken,
+                            onQuery = viewModel::setQuery,
+                            onToggleRegex = viewModel::toggleRegexSearch,
+                            onClose = viewModel::closeSearch,
+                        )
+                    } else {
                     TopAppBar(
                         title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         navigationIcon = {
@@ -109,6 +131,12 @@ fun BrowserScreen(
                                 IconButton(onClick = viewModel::paste) {
                                     Icon(painterResource(R.drawable.ic_paste), stringResource(R.string.action_paste))
                                 }
+                            }
+                            IconButton(onClick = viewModel::openSearch) {
+                                Icon(
+                                    painterResource(R.drawable.ic_search),
+                                    stringResource(R.string.browser_search),
+                                )
                             }
                             SortMenu(
                                 key = sortKey,
@@ -131,6 +159,10 @@ fun BrowserScreen(
                             }
                         },
                     )
+                    }
+                    // Kept under both: a search narrows this directory, it does
+                    // not move you out of it, and the row is how you can see
+                    // which directory you are narrowing.
                     Breadcrumbs(viewModel.path, viewModel.serverName, onJumpTo)
                 }
             }
@@ -148,7 +180,18 @@ fun BrowserScreen(
                 modifier = modifier,
             ) {
                 if (state.rows.isEmpty()) {
-                    CenteredMessage(stringResource(R.string.browser_empty))
+                    // Three different nothings, and they must not read the same.
+                    // "This directory is empty" is wrong and misleading when the
+                    // directory is full and the box is hiding all of it.
+                    // Read once into a local: `search` is a delegated property,
+                    // and a delegated property cannot be smart-cast.
+                    val broken = search as? EntrySearch.Broken
+                    when {
+                        broken != null ->
+                            CenteredMessage(stringResource(R.string.browser_search_invalid, broken.reason))
+                        search.filtering -> CenteredMessage(stringResource(R.string.browser_search_no_matches))
+                        else -> CenteredMessage(stringResource(R.string.browser_empty))
+                    }
                 } else {
                     // The rows carry only what the list draws; what an entry *is*
                     // — a folder, a film, something with no player — stays here,
@@ -200,6 +243,82 @@ fun BrowserScreen(
  * is the one that can be unavailable — which is where "a menu for one item" and
  * "act on many" genuinely differ, and the reason one mode can serve both.
  */
+/**
+ * The bar that replaces the title while searching.
+ *
+ * The chip at the end is what makes the same characters mean two things: off,
+ * "(1)" is a file name; on, it is a capture group. Spelled `.*` rather than drawn
+ * as an icon because there is no icon for "read this as a pattern" that anyone
+ * recognises, and a `FilterChip` rather than a tinted button because its
+ * selected state is announced as well as coloured.
+ *
+ * The field takes focus as it appears — tapping the magnifier and then having to
+ * tap again to type would be a bar that does not do what it looks like it does.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchField(
+    query: String,
+    regex: Boolean,
+    broken: Boolean,
+    onQuery: (String) -> Unit,
+    onToggleRegex: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    val regexLabel = stringResource(R.string.browser_search_regex)
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp),
+    ) {
+        IconButton(onClick = onClose) {
+            Icon(
+                painterResource(R.drawable.ic_arrow_back),
+                stringResource(R.string.browser_search_close),
+            )
+        }
+        TextField(
+            value = query,
+            onValueChange = onQuery,
+            singleLine = true,
+            // Nothing else says a pattern will not compile: an empty list reads
+            // as "no such file", so the tint is the only signal that the box,
+            // and not the directory, is the problem. The reason itself goes
+            // where the list would have been.
+            isError = broken,
+            placeholder = { Text(stringResource(R.string.browser_search_hint)) },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQuery("") }) {
+                        Icon(
+                            painterResource(R.drawable.ic_close),
+                            stringResource(R.string.browser_search_clear),
+                        )
+                    }
+                }
+            },
+            // Flattened into the bar: a boxed field inside a title bar reads as
+            // two bars stacked.
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent,
+            ),
+            modifier = Modifier.weight(1f).focusRequester(focus),
+        )
+        FilterChip(
+            selected = regex,
+            onClick = onToggleRegex,
+            label = { Text(".*") },
+            modifier = Modifier.semantics { contentDescription = regexLabel },
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SelectionBar(viewModel: BrowserViewModel) {

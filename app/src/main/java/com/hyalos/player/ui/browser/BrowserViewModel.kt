@@ -30,9 +30,12 @@ import com.hyalos.player.ui.common.dateText
 import com.hyalos.player.ui.common.sizeText
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -103,6 +106,62 @@ class BrowserViewModel(
     val sortAscending: StateFlow<Boolean> = container.settings.settings
         .map { it.sortAscending }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    // ---------------------------------------------------------------------
+    // Search
+    // ---------------------------------------------------------------------
+
+    /**
+     * The search box: what is typed, whether it is read as a regular expression,
+     * and whether the box is open at all.
+     *
+     * Deliberately **not** a stored preference, unlike the layout and the sort
+     * order. Those are habits that should outlive a visit; a search is about the
+     * directory in front of you. Opening the app tomorrow to a list still
+     * filtered by yesterday's pattern would be a screen with things missing and
+     * nothing on it to say why.
+     *
+     * Held in the ViewModel rather than in the screen so it survives being
+     * covered — the settings page, a rotation — for the same reason the sort
+     * order is not remembered by the composable.
+     */
+    private val _query = MutableStateFlow("")
+    val query: StateFlow<String> = _query.asStateFlow()
+
+    private val _regexSearch = MutableStateFlow(false)
+    val regexSearch: StateFlow<Boolean> = _regexSearch.asStateFlow()
+
+    private val _searching = MutableStateFlow(false)
+    val searching: StateFlow<Boolean> = _searching.asStateFlow()
+
+    /**
+     * What the box currently means.
+     *
+     * Derived rather than stored, so the list and the screen can never disagree
+     * about what is being asked — the same argument as `State.Loaded` being the
+     * only place the order is decided.
+     */
+    val search: StateFlow<EntrySearch> = combine(_query, _regexSearch) { text, asRegex ->
+        entrySearchOf(text, asRegex)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EntrySearch.Off)
+
+    fun openSearch() {
+        _searching.value = true
+    }
+
+    /** Leaving the box also empties it: a filter you cannot see is a trap. */
+    fun closeSearch() {
+        _searching.value = false
+        _query.value = ""
+    }
+
+    fun setQuery(text: String) {
+        _query.value = text
+    }
+
+    fun toggleRegexSearch() {
+        _regexSearch.value = !_regexSearch.value
+    }
 
     // ---------------------------------------------------------------------
     // Selection
@@ -455,18 +514,37 @@ class BrowserViewModel(
         // the only place `State.Loaded` is produced, so the two can never
         // disagree about what order the list is in.
         viewModelScope.launch {
-            combine(entries, container.settings.settings) { raw, settings ->
-                raw?.let { EntrySorting.prepare(it, settings.sortKey, settings.sortAscending, nameOrder) }
-            }.collect { sorted ->
-                if (sorted != null) {
-                    // A selection holds names, and names stop existing — after a
-                    // rename, a delete, or a change made by somebody else. Left
-                    // alone they would have the toolbar counting items that are
-                    // not on screen and cannot be acted on.
-                    selection = selection.prune(sorted.mapTo(mutableSetOf()) { it.name })
-                    state = State.Loaded(sorted, sorted.map { it.toRow() })
+            combine(
+                entries,
+                container.settings.settings,
+                _query,
+                _regexSearch,
+            ) { raw, settings, text, asRegex ->
+                raw?.let {
+                    val search = entrySearchOf(text, asRegex)
+                    EntrySorting.prepare(it, settings.sortKey, settings.sortAscending, nameOrder)
+                        .filter { item -> search.allows(item.name) }
                 }
             }
+                // The pattern is the user's, and a badly written one can take a
+                // very long time to fail: `(a+)+$` against a name of a's
+                // backtracks exponentially. Everything downstream lands in
+                // Compose state, so on the main thread that is an ANR, not a
+                // slow list.
+                .flowOn(Dispatchers.Default)
+                .collect { visible ->
+                    if (visible != null) {
+                        // A selection holds names, and names stop existing —
+                        // after a rename, a delete, or a change made by somebody
+                        // else. Pruned against what is *shown* rather than what
+                        // was listed, so that hiding a file with the search box
+                        // also takes it out of the count: the toolbar acts on
+                        // what is on screen, and it must not be able to delete
+                        // something the user cannot see.
+                        selection = selection.prune(visible.mapTo(mutableSetOf()) { it.name })
+                        state = State.Loaded(visible, visible.map { it.toRow() })
+                    }
+                }
         }
 
         load()
