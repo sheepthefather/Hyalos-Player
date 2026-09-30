@@ -412,7 +412,10 @@ class BrowserViewModel(
                 } else {
                     container.files.copyInto(content.items, target, report)
                 }
-                container.clipboard.consumeIfCut()
+                // Emptied before the leftover is named below, not after: the
+                // paste button and the notice are both news about the same
+                // moment, and the button should not outlive it either way.
+                container.clipboard.consume()
                 // A leftover is the one failure the report's own wording cannot
                 // carry: "1 failed" says nothing about the file the user has to
                 // delete before trying again, and naming it is the whole point.
@@ -431,7 +434,7 @@ class BrowserViewModel(
             } else {
                 container.files.copyInto(content.items, target)
             }
-            container.clipboard.consumeIfCut()
+            container.clipboard.consume()
             load(refresh = true)
             result
         }

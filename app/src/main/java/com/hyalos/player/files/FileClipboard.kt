@@ -11,10 +11,16 @@ import kotlinx.coroutines.flow.asStateFlow
  * something from one directory to another — and the paste may well happen on a
  * different server, which is why each item remembers where it came from.
  *
- * **A copy survives pasting; a cut does not.** Somebody who copies a film and
- * pastes it into three folders means to paste it three times; somebody who cuts
- * it means to move it once, and leaving it on the clipboard afterwards would
- * invite a second paste that could only be a mistake.
+ * **Pasting empties it, either mode.** Once something has been pasted the
+ * clipboard is done with it, and the top bar's paste button goes with it.
+ *
+ * A copy used to be kept, on the reasoning that somebody who copies a film and
+ * pastes it into three folders means to paste it three times. That reasoning
+ * is sound but the result was not: the button then never went away, and there
+ * was no way at all to dismiss it, so the clipboard was a one-way door. A cut
+ * had the sharper reason: after a partial move, some of what it holds has
+ * already left the source, and a second paste would be pasting items that are
+ * no longer there.
  */
 class FileClipboard {
     private val state = MutableStateFlow<ClipboardContent?>(null)
@@ -31,9 +37,16 @@ class FileClipboard {
         state.value = ClipboardContent(ClipboardMode.CUT, items)
     }
 
-    /** Called after a cut has been pasted; a copy is left alone. */
-    fun consumeIfCut() {
-        if (state.value?.mode == ClipboardMode.CUT) state.value = null
+    /**
+     * Called once a paste has reported, whatever it managed to do.
+     *
+     * Deliberately not conditional on success. What a failed paste leaves
+     * behind is worth re-reading to make the decision again — that is what the
+     * report and the leftover notice are for — and a clipboard kept for a retry
+     * would hold items a partly-done cut has already moved away.
+     */
+    fun consume() {
+        state.value = null
     }
 
     fun clear() {
