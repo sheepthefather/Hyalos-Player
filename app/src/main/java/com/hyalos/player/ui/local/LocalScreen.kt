@@ -4,15 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -27,9 +23,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
+import com.hyalos.player.data.BrowserLayout
 import com.hyalos.player.data.LocalSource
 import com.hyalos.player.ui.common.CenteredMessage
+import com.hyalos.player.ui.common.EntryGrid
+import com.hyalos.player.ui.common.EntryList
+import com.hyalos.player.ui.common.EntryRow
 import java.io.File
 
 /**
@@ -44,7 +45,7 @@ import java.io.File
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocalScreen(onOpenPlace: (path: String) -> Unit) {
+fun LocalScreen(viewModel: LocalViewModel, onOpenPlace: (path: String) -> Unit) {
     var granted by remember { mutableStateOf(LocalSource.granted()) }
 
     // Re-checked when this screen comes back. The permission is granted on a
@@ -65,19 +66,64 @@ fun LocalScreen(onOpenPlace: (path: String) -> Unit) {
         placesThatExist { File(LocalSource.root, it).isDirectory }
     }
 
+    val layout by viewModel.layout.collectAsStateWithLifecycle()
+    val grid = layout == BrowserLayout.GRID
+
+    // The places as the browser's own rows, so both views come for nothing: a
+    // place is a row with an icon and no frame to extract, which is exactly what
+    // the browser already draws for a folder.
+    val rows = places.map { place ->
+        EntryRow(
+            id = place.path(),
+            name = stringResource(place.label),
+            // One line. What a place is called on disk (`DCIM`, `Download`) is
+            // not what it is called in the tab, and saying both would be two
+            // names for one door.
+            detail = null,
+            icon = place.icon,
+            thumbnail = null,
+        )
+    }
+
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.tab_local)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.tab_local)) },
+                actions = {
+                    IconButton(onClick = viewModel::toggleLayout) {
+                        Icon(
+                            painterResource(if (grid) R.drawable.ic_view_list else R.drawable.ic_grid_view),
+                            stringResource(
+                                if (grid) R.string.browser_switch_to_list else R.string.browser_switch_to_grid,
+                            ),
+                        )
+                    }
+                },
+            )
+        },
     ) { insets ->
-        LazyColumn(Modifier.fillMaxSize().padding(insets)) {
-            items(places, key = { it.path() }) { place ->
-                ListItem(
-                    headlineContent = { Text(stringResource(place.label)) },
-                    leadingContent = {
-                        Icon(painterResource(place.icon), contentDescription = null)
-                    },
-                    modifier = Modifier.clickable { onOpenPlace(place.path()) },
-                )
-            }
+        val open: (EntryRow) -> Unit = { onOpenPlace(it.id) }
+        // Nothing here is selectable, so the selection machinery is handed an
+        // empty set and a long press that does nothing: a place cannot be
+        // renamed, deleted or copied, it is a door.
+        if (grid) {
+            EntryGrid(
+                items = rows,
+                loadThumbnail = { null },
+                selected = emptySet(),
+                onClick = open,
+                onLongClick = {},
+                modifier = Modifier.padding(insets),
+            )
+        } else {
+            EntryList(
+                items = rows,
+                loadThumbnail = { null },
+                selected = emptySet(),
+                onClick = open,
+                onLongClick = {},
+                modifier = Modifier.padding(insets),
+            )
         }
     }
 }

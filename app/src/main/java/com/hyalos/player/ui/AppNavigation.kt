@@ -38,6 +38,7 @@ import com.hyalos.player.ui.browser.BrowserScreen
 import com.hyalos.player.ui.browser.BrowserViewModel
 import com.hyalos.player.data.LocalSource
 import com.hyalos.player.ui.local.LocalScreen
+import com.hyalos.player.ui.local.LocalViewModel
 import com.hyalos.player.ui.player.PlayerScreen
 import com.hyalos.player.ui.player.PlayerViewModel
 import com.hyalos.player.ui.playlist.PlaylistScreen
@@ -201,7 +202,10 @@ private fun RouteStack(
                 // decides which directory the kernel is pointed at, and the
                 // paths on this stack are relative to it, exactly as a server's
                 // share is.
-                LocalScreen(onOpenPlace = { backStack.add(Route.Browse(LocalSource.ID, it)) })
+                LocalScreen(
+                    viewModel = viewModel { LocalViewModel(container) },
+                    onOpenPlace = { backStack.add(Route.Browse(LocalSource.ID, it)) },
+                )
             }
             entry<Route.Playlists> {
                 PlaylistServersScreen(
