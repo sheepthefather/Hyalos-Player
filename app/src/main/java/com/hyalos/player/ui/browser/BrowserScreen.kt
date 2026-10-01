@@ -356,22 +356,8 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
             }
         },
         actions = {
-            if (single != null) {
-                IconButton(onClick = { viewModel.startRename(single) }) {
-                    Icon(painterResource(R.drawable.ic_edit), stringResource(R.string.action_rename))
-                }
-                // Beside rename, because it is the other thing that only makes
-                // sense for exactly one file — and only for one that can be
-                // played: "what codec is this" is a question about media.
-                if (single.playable) {
-                    IconButton(onClick = { viewModel.showInfo(single) }) {
-                        Icon(painterResource(R.drawable.ic_info), stringResource(R.string.action_info))
-                    }
-                }
-            }
             // Copy and cut are one idea — the clipboard — and one icon's worth of
-            // room. Kept apart they were the last straw for the count beside
-            // them, which wrapped onto two lines.
+            // room.
             Box {
                 var open by remember { mutableStateOf(false) }
                 IconButton(onClick = { open = true }) {
@@ -398,12 +384,59 @@ private fun SelectionBar(viewModel: BrowserViewModel) {
                     )
                 }
             }
-            // Before delete: the one destructive action stays last.
             IconButton(onClick = viewModel::addToPlaylist) {
                 Icon(painterResource(R.drawable.ic_playlist), stringResource(R.string.action_add_to_playlist))
             }
-            IconButton(onClick = viewModel::askDelete) {
-                Icon(painterResource(R.drawable.ic_delete), stringResource(R.string.action_delete))
+            // Rename, info and delete sit behind one button.
+            //
+            // They were three icons, and with the two beside them they took 720
+            // of the bar's 1080px and left the title 192 — less than "已选 1 项"
+            // needs, so the one case that shows five icons was the one case whose
+            // title wrapped. Exactly one file selected is both when the count is
+            // least informative (the icons themselves already say "one") and when
+            // it was breaking.
+            //
+            // Which of the three apply depends on the selection, so the menu is
+            // built for it rather than fixed: two items for a single file, three
+            // for a single playable one, and delete alone for a batch.
+            Box {
+                var open by remember { mutableStateOf(false) }
+                IconButton(onClick = { open = true }) {
+                    Icon(painterResource(R.drawable.ic_more_vert), stringResource(R.string.more))
+                }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    if (single != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_rename)) },
+                            leadingIcon = { Icon(painterResource(R.drawable.ic_edit), contentDescription = null) },
+                            onClick = {
+                                open = false
+                                viewModel.startRename(single)
+                            },
+                        )
+                        // Only for one that can be played: "what codec is this"
+                        // is a question about media.
+                        if (single.playable) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_info)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.ic_info), contentDescription = null) },
+                                onClick = {
+                                    open = false
+                                    viewModel.showInfo(single)
+                                },
+                            )
+                        }
+                    }
+                    // Last: the one destructive action stays at the bottom.
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_delete)) },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_delete), contentDescription = null) },
+                        onClick = {
+                            open = false
+                            viewModel.askDelete()
+                        },
+                    )
+                }
             }
         },
     )
