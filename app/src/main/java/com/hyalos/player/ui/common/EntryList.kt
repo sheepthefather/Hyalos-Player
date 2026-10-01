@@ -114,6 +114,10 @@ fun EntryList(
                                 row,
                                 loadThumbnail,
                                 Modifier.size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT),
+                                // A row with nothing to show shows its icon
+                                // bare; the slot is still reserved, so names
+                                // still line up down the column.
+                                fillWhenEmpty = false,
                             )
                             if (isSelected) SelectedBadge(Modifier.align(Alignment.Center))
                         }
@@ -251,17 +255,36 @@ private fun ThumbnailFrame(
     row: EntryRow,
     loadThumbnail: suspend (ThumbnailKey) -> Bitmap?,
     modifier: Modifier = Modifier,
+    /**
+     * Whether a row with no picture still gets the filled square.
+     *
+     * The fill is a **backdrop**: somewhere for a thumbnail to land, and
+     * something saying a picture belongs here while it loads. With no picture
+     * coming it is a grey square with a small icon lost in the middle of it,
+     * which is what a *missing* picture looks like — so the list drops it and
+     * draws the icon bare.
+     *
+     * The grid keeps it, because there the square is not a backdrop but the
+     * tile itself; a bare icon would leave the tile with no edges at all.
+     */
+    fillWhenEmpty: Boolean = true,
 ) {
     val shape = RoundedCornerShape(4.dp)
+    val bitmap by produceState<Bitmap?>(initialValue = null, row.id) {
+        val key = row.thumbnail
+        value = if (key == null) null else loadThumbnail(key)
+    }
+    val frame = bitmap
     Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant, shape),
+        modifier = modifier.then(
+            if (fillWhenEmpty || frame != null) {
+                Modifier.background(MaterialTheme.colorScheme.surfaceVariant, shape)
+            } else {
+                Modifier
+            },
+        ),
         contentAlignment = Alignment.Center,
     ) {
-        val bitmap by produceState<Bitmap?>(initialValue = null, row.id) {
-            val key = row.thumbnail
-            value = if (key == null) null else loadThumbnail(key)
-        }
-        val frame = bitmap
         if (frame == null) {
             Icon(
                 painterResource(row.icon),
