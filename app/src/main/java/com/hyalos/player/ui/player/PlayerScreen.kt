@@ -249,13 +249,24 @@ fun PlayerScreen(
                 // Upright there is no room for the whole row. Measured: five
                 // 52dp buttons, the time and the two icons on the right come to
                 // 1530px against a 1080px screen, and even with the time gone
-                // they still overrun. So the two navigation buttons and the time
-                // sit this one out. Nothing leaves the queue itself — the film
-                // still advances, and the buttons return with the landscape.
-                val crowd = if (portrait) View.GONE else View.VISIBLE
-                view.findViewById<View>(Media3R.id.exo_prev)?.visibility = crowd
-                view.findViewById<View>(Media3R.id.exo_next)?.visibility = crowd
-                view.findViewById<View>(Media3R.id.exo_time)?.visibility = crowd
+                // they still overrun.
+                //
+                // So three of them sit this one out — and it is the **seek**
+                // buttons that go, not the navigation ones. It used to be the
+                // other way round, which left the row as play twice over and no
+                // way to reach the next episode: on a phone held upright,
+                // skipping ahead is what the row is for, and ±5s is a landscape
+                // luxury. Nothing leaves the queue itself either way.
+                val roomy = if (portrait) View.GONE else View.VISIBLE
+                view.findViewById<View>(Media3R.id.exo_rew_with_amount)?.visibility = roomy
+                view.findViewById<View>(Media3R.id.exo_ffwd_with_amount)?.visibility = roomy
+                view.findViewById<View>(Media3R.id.exo_time)?.visibility = roomy
+                // Upright these are the row, so they are asked for explicitly.
+                // Media3 hides them by itself when there is nowhere to go.
+                if (portrait) {
+                    view.findViewById<View>(Media3R.id.exo_prev)?.visibility = View.VISIBLE
+                    view.findViewById<View>(Media3R.id.exo_next)?.visibility = View.VISIBLE
+                }
                 // What the time it hides is replaced by, upright.
                 view.findViewById<View>(R.id.player_remaining)?.visibility =
                     if (portrait) View.VISIBLE else View.GONE
