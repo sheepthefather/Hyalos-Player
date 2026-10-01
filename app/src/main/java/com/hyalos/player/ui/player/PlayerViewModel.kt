@@ -35,6 +35,8 @@ import com.hyalos.player.ui.common.dateText
 import com.hyalos.player.ui.common.sizeText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -414,6 +416,48 @@ class PlayerViewModel(
     /** The rows of the info dialog, or `null` when it is closed. */
     var info by mutableStateOf<List<InfoSection>?>(null)
         private set
+
+    /**
+     * What the drag on the picture is adjusting, and how much, while it is.
+     *
+     * Owned here rather than `remember`ed in the screen for the reason the
+     * rest of this class exists: the composition is not the thing that lives
+     * longest. [PlayerScreen] can be torn down and rebuilt underneath a running
+     * gesture — covering it with the settings page does exactly that — and a
+     * readout left behind by a composition nobody is looking at would sit on
+     * screen for good.
+     */
+    /**
+     * The app-wide brightness the gesture sets.
+     *
+     * Handed out rather than kept here: it outlives this ViewModel by design,
+     * which is the whole reason it lives in the container. See `ScreenLevels`.
+     */
+    internal val screenLevels get() = container.screenLevels
+
+    internal var level by mutableStateOf<LevelFeedback?>(null)
+        private set
+
+    /** The countdown that clears [level] once the finger has been lifted. */
+    private var levelTimeout: Job? = null
+
+    /** Called on every move of the gesture, and once as it starts. */
+    internal fun showLevel(target: DragTarget, fraction: Float) {
+        levelTimeout?.cancel()
+        level = LevelFeedback(target, fraction.coerceIn(0f, 1f))
+    }
+
+    /**
+     * Called when the finger lifts. The readout stays a moment longer, because
+     * vanishing on release gives no time to read the number that was just set.
+     */
+    internal fun releaseLevel() {
+        levelTimeout?.cancel()
+        levelTimeout = viewModelScope.launch {
+            delay(LEVEL_LINGER_MS)
+            level = null
+        }
+    }
 
     /**
      * Pause, and lay out what the file and the player between them know.

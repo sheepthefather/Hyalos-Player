@@ -264,6 +264,20 @@ ExoPlayer ─ ProgressiveMediaSource
 
 **画面比例**（适应 / 拉伸 / 裁切）对应 `PlayerView.resizeMode` 的 FIT / FILL / ZOOM。默认「适应」：另两个一个会畸变、一个会裁掉画面，应该是用户主动选的，而不是打开影片就撞上的。它应用在 `AndroidView` 的 `update` 里而不是 `factory`——`factory` 只跑一次，之后改设置就再也到不了那个 View。
 
+### 手势：左半屏调亮度、右半屏调音量
+
+画面本身就是控制面：左半屏上下滑调亮度，右半屏上下滑调系统媒体音量，划动时屏中间给带百分比的读数。换算全在 `ui/player/DragLevels.kt` 的纯函数里（`ScrollBarGeometry` 的同构做法），`Composable` 只负责接线。
+
+**亮度值不能放 `PlayerViewModel`。** 它是**每个 `Route.Play` entry 一个**，离开播放器即销毁，而要求是「换一部影片还保持」。所以放 `AppContainer.screenLevels`（应用级，与 `clipboard` 同类）；`PlayerScreen` 进入时写到窗口、`onDispose` 时把窗口设回 `-1f`。被设置页盖住时组合会销毁，于是窗口先还回系统值、回来时再应用一次——**这正是想要的**，设置页不该继承影片的暗度。
+
+**手势层挂在顶层 `Box`（`AndroidView` 的祖先）上，不是盖在它上面的兄弟节点。** 这是这个功能唯一真正有风险的地方，机制值得记下来：Compose 与 `AndroidView` 之间隔着 `PointerInteropFilter`，它在 **Initial 阶段转发 DOWN/UP、在 Final 阶段转发 MOVE**；**只要有任何 Compose 节点消费了这次事件，它就给 View 发 `ACTION_CANCEL`**。而 `detectVerticalDragGestures` 用的是 `awaitFirstDown(requireUnconsumed = false)`，**越过 touch slop 之前不消费任何东西**——所以点击的 DOWN/UP 照旧到达 `PlayerView`，控制条照常唤出；一旦越过 slop 我们消费掉，同一次事件的 Final 阶段就让 interop 发出 cancel，不会在松手时多出一次误触。放在兄弟节点上则会由它接下所有点击，控制条再也唤不出来。
+
+**信息浮层打开时手势整个让位**（`pointerInput` 的 key 是 `viewModel.info == null`）。它自带全屏 `clickable`，且内部列表要竖直滚动——祖先节点的检测器仍会被唤醒，不如干脆退出。
+
+**音量按档位才写。** 系统流只有十几档而拖动是连续的，大多数帧算出的档位与上一帧相同；不加判断就是每帧一次 binder 调用。`setStreamVolume` 的 flags 传 0：带上 `FLAG_SHOW_UI` 会让系统音量条与本应用的读数同时出现，同一件事说两遍。
+
+**验证这类功能时要先确认读数工具是真的。** 本轮一度断定「模拟器改不了音量」，依据是 `adb shell cmd media_session volume --stream 3 --set N` 无效——**那个命令在本机根本不生效**，连 shell 身份都不行，害得白重启了一次模拟器。真正能用的是：写用 `input keyevent 24/25`（硬件音量键），读用 `dumpsys audio` 里 `STREAM_MUSIC` 段的 **`streamVolume:`** 字段（注意不是 `Current:` 那一行，那行第一个数是总档、括号里才是设备档）。
+
 ### 播放模式
 
 四个模式——**不循环、循环列表、单曲循环、仅播当前**——在播放器**顶栏**的一个按钮上轮转（信息与设置之间），并**取代**了原来设置里的「自动播放下一个」开关。设置页里不再显示它：放在那儿只能是「开关搬走了」的一声道歉。

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "brightness_6", Apache-2.0.
+  Source: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/brightness_6/materialsymbolsoutlined/brightness_6_24px.svg
+
+  Path data is byte-for-byte the upstream `d` attribute. The source viewBox is
+  already "0 -960 960 960" — the same 960 grid this drawable uses — so there is
+  no rescaling here (nothing x40 or otherwise): the glyph is moved into the
+  viewport with a single translateY, exactly as `ic_mode_sequence.xml` does.
+
+  `brightness_medium` was checked as the alternative and is byte-identical to
+  `brightness_6` in the outlined set, so the two names are the same picture.
+
+  Filled white, not tinted, for the reason spelled out in
+  `ic_orientation_landscape.xml`: these icons are read by views that set no
+  `android:tint`, so each icon carries its own colour, and anything but white
+  would disappear against the dark scrim the gesture hint is drawn on.
+
+  Shown while the finger is dragging vertically on the LEFT half of the video:
+  up raises the screen brightness and down lowers it. A sun reads as brightness
+  on its own, without needing the percentage text beside it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M480-28 346-160H160v-186L28-480l132-134v-186h186l134-132 134 132h186v186l132 134-132 134v186H614L480-28Zm0-252q83 0 141.5-58.5T680-480q0-83-58.5-141.5T480-680v400Zm0 140 100-100h140v-140l100-100-100-100v-140H580L480-820 380-720H240v140L140-480l100 100v140h140l100 100Zm0-340Z" />
+    </group>
+</vector>

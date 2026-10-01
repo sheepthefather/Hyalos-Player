@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "volume_up", Apache-2.0.
+  Source: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/volume_up/materialsymbolsoutlined/volume_up_24px.svg
+
+  Path data is byte-for-byte the upstream `d` attribute. The source viewBox is
+  already "0 -960 960 960" — the same 960 grid this drawable uses — so there is
+  no rescaling here (nothing x40 or otherwise): the glyph is moved into the
+  viewport with a single translateY, exactly as `ic_mode_sequence.xml` does.
+
+  Filled white, not tinted, for the reason spelled out in
+  `ic_orientation_landscape.xml`: these icons are read by views that set no
+  `android:tint`, so each icon carries its own colour, and anything but white
+  would disappear against the dark scrim the gesture hint is drawn on.
+
+  Shown while the finger is dragging vertically on the RIGHT half of the video:
+  up turns the volume up and down turns it down. The speaker with sound waves
+  is the conventional "volume" mark; the muted variants would be the wrong
+  picture for a hint that fires while the level is being changed.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z" />
+    </group>
+</vector>

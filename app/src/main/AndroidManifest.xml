@@ -42,6 +42,13 @@
       to be declared as well as the permission, and Android 14 requires the
       declaration to match the permission.
     -->
+    <!--
+      The right-hand drag moves the system's media volume, and `setStreamVolume`
+      asks for this. It is a normal permission: granted at install, with no
+      dialog, and it grants nothing but the ability to move audio streams.
+    -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 

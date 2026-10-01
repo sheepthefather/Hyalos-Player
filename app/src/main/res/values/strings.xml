@@ -235,6 +235,11 @@
     <string name="player_rotate_to_portrait">切换到竖屏</string>
     <!-- 控制栏的播放模式按钮。名字说的是当前模式，按钮点一下切到下一个。 -->
     <string name="player_playback_mode">播放模式：%1$s</string>
+    <!-- 左右半屏上下滑动时的提示。百分比由代码拼，不进字符串表。 -->
+    <string name="player_brightness">亮度</string>
+    <string name="player_volume">音量</string>
+    <!-- 提示里读出来的整句，供无障碍朗读；屏幕上显示的是「图标 + 进度条 + 数字」。 -->
+    <string name="player_level_percent">%1$s %2$d%%</string>
 
     <!-- 关于 -->
     <string name="about_version">版本 %1$s</string>

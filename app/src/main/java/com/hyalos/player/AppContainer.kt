@@ -16,6 +16,7 @@ import com.hyalos.player.thumbnails.LanePool
 import com.hyalos.player.thumbnails.ThumbnailCache
 import com.hyalos.player.thumbnails.ThumbnailLoader
 import com.hyalos.player.thumbnails.ThumbnailSources
+import com.hyalos.player.ui.player.ScreenLevels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -65,6 +66,22 @@ class AppContainer(context: Context) {
     val thumbnails = ThumbnailLoader(thumbnailCache, thumbnailLanes)
 
     val clipboard = FileClipboard()
+
+    /**
+     * The brightness the player's gesture was last set to, or null for the
+     * system's.
+     *
+     * Here rather than in `PlayerViewModel` because that one is **per film** —
+     * a `Route.Play` entry gets a ViewModel and keeps it only as long as the
+     * screen — and what was asked for is a brightness that survives going from
+     * one film to the next. It is not a setting either: it does not outlive the
+     * app, and it is not written to disk.
+     *
+     * Nothing acts on this on its own. `PlayerScreen` applies it to the window
+     * while it is composed and puts the window back to the system value when it
+     * leaves, so the browser is never left dimmed by a film.
+     */
+    val screenLevels = ScreenLevels()
 
     /**
      * The copy that is running, if one is. Application-scoped for the same reason

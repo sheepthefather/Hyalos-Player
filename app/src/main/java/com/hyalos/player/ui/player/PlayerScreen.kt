@@ -1,9 +1,14 @@
 package com.hyalos.player.ui.player
 
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.media.AudioManager
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
+import android.view.Window
+import android.view.WindowManager
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
@@ -16,7 +21,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +36,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,7 +52,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,6 +85,7 @@ import com.hyalos.player.playback.PlaybackErrors
 import com.hyalos.player.ui.common.InfoColors
 import com.hyalos.player.ui.common.InfoSectionList
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 /**
  * Full-screen playback through Media3's `PlayerView`.
@@ -172,8 +187,14 @@ fun PlayerScreen(
         },
     )
 
+    // The system's media volume is what the gesture moves, so the hardware keys
+    // and the gesture agree about what the volume is.
+    val context = LocalContext.current
+    val audio = remember(context) { context.getSystemService(AudioManager::class.java) }
+
     Immersive()
     PlayerOrientation(orientationOverride ?: initialOrientation)
+    ScreenBrightness(viewModel.screenLevels.brightness)
 
     // No background playback yet, so leaving the app pauses.
     //
@@ -209,7 +230,98 @@ fun PlayerScreen(
         onDispose { player.removeListener(listener) }
     }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+    Modifier
+        .fillMaxSize()
+        .background(Color.Black)
+        // The picture doubles as a control surface: up and down on the left half
+        // is brightness, on the right half is volume.
+        //
+        // **On this box, which is an ancestor of the `AndroidView`** — not on an
+        // overlay drawn above it. Compose hands an unconsumed event on to the
+        // child, so a tap this ignores still reaches the `PlayerView` and still
+        // brings the controls up. A sibling drawn on top would take every tap
+        // itself and tapping the picture would never show the controls again.
+        // The arithmetic is in `DragLevels`; this only wires it up.
+        // Keyed on whether the info sheet is up: while it is, it owns the
+        // screen — its own list scrolls vertically — and a drag on the panel or
+        // the dim around it must not also be moving the brightness. Standing
+        // down entirely is simpler to reason about than trying to tell the two
+        // apart by where the finger is.
+        .pointerInput(viewModel.info == null) {
+            if (viewModel.info != null) return@pointerInput
+            var target: DragTarget? = null
+            var from = 0f
+            var travelled = 0f
+
+            // The stream has a handful of discrete steps and a drag is
+            // continuous, so most frames land on the step already set. Writing
+            // it anyway would be a binder call per frame for no change.
+            var lastVolumeIndex = -1
+
+            detectVerticalDragGestures(
+                onDragStart = { at ->
+                    val which = dragTargetAt(at.x, size.width.toFloat())
+                    target = which
+                    travelled = 0f
+                    lastVolumeIndex = -1
+                    from = when (which) {
+                        DragTarget.BRIGHTNESS -> currentBrightness(activity?.window, context)
+                        DragTarget.VOLUME -> audio?.let {
+                            levelForIndex(
+                                it.getStreamVolume(AudioManager.STREAM_MUSIC),
+                                it.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
+                            )
+                        } ?: 0f
+                    }
+                    viewModel.showLevel(which, from)
+                },
+                onVerticalDrag = { change, amount ->
+                    // Claimed, so the drag does not also reach the player behind
+                    // and fire a tap once the finger lifts.
+                    change.consume()
+                    val which = target ?: return@detectVerticalDragGestures
+                    travelled += amount
+                    when (which) {
+                        DragTarget.BRIGHTNESS -> {
+                            val level = brightnessAfter(from, travelled, size.height.toFloat())
+                            // Plain var, not Compose state: writing it does not
+                            // recompose, which is what keeps a sixty-times-a-
+                            // second drag from redrawing the whole screen. The
+                            // readout below has state of its own.
+                            viewModel.screenLevels.brightness = level
+                            activity?.window?.setBrightness(level)
+                            viewModel.showLevel(which, level)
+                        }
+
+                        DragTarget.VOLUME -> audio?.let { manager ->
+                            val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                            val index = volumeIndexFor(
+                                levelAfter(from, travelled, size.height.toFloat()),
+                                max,
+                            )
+                            if (index != lastVolumeIndex) {
+                                // Flags 0 on purpose: the system's own volume
+                                // panel would otherwise come up alongside this
+                                // readout and say the same thing twice.
+                                manager.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0)
+                                lastVolumeIndex = index
+                            }
+                            viewModel.showLevel(which, levelForIndex(index, max))
+                        }
+                    }
+                },
+                onDragEnd = {
+                    target = null
+                    viewModel.releaseLevel()
+                },
+                onDragCancel = {
+                    target = null
+                    viewModel.releaseLevel()
+                },
+            )
+        },
+) {
         AndroidView(
             factory = { context ->
                 // Inflated rather than built in code, because the controller
@@ -380,6 +492,10 @@ fun PlayerScreen(
         // Last in the box, so it is over everything: the picture, the control
         // bar and the title bar. Drawn before the `AndroidView` it would be
         // behind the surface and never seen at all.
+        // After the bars, so the readout sits over them; before the info sheet,
+        // which is a thing the user opened and should stay on top.
+        PlayerLevelOverlay(viewModel)
+
         PlayerInfoOverlay(viewModel)
     }
 }
@@ -506,6 +622,134 @@ private fun PlayerInfoOverlay(viewModel: PlayerViewModel) {
  */
 private const val PLAYER_INFO_WIDTH_FRACTION = 0.6f
 private const val PLAYER_INFO_HEIGHT_FRACTION = 0.64f
+
+/**
+ * Where a brightness drag starts from.
+ *
+ * The window's own value is `-1f` until the gesture has been used once, meaning
+ * "follow the system" — and a drag that starts from there would jump the screen
+ * to some arbitrary brightness on its first pixel. So when the window has no
+ * opinion, the system's is read out and used as the starting point. **Reading it
+ * needs no permission**; only writing does, which is why the gesture writes to
+ * the window instead.
+ */
+private fun currentBrightness(window: Window?, context: Context): Float {
+    val own = window?.attributes?.screenBrightness
+        ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    if (own >= 0f) return own
+    val system = Settings.System.getInt(
+        context.contentResolver,
+        Settings.System.SCREEN_BRIGHTNESS,
+        SYSTEM_BRIGHTNESS_MIDPOINT,
+    )
+    return brightnessFromSetting(system)
+}
+
+private const val SYSTEM_BRIGHTNESS_MIDPOINT = 128
+
+/**
+ * Hold this window at [brightness], or at the system's when it is null.
+ *
+ * The value is the app-wide one rather than anything owned here, because it has
+ * to survive going from one film to the next — see `ScreenLevels`. What is owned
+ * here is only the *applying*: the window belongs to the activity, the player is
+ * one screen inside it, and leaving must put the window back. Otherwise a film
+ * watched in the dark would leave the file browser dimmed too.
+ *
+ * `onDispose` covers more than leaving the player. Covering it with the settings
+ * page tears this composition down as well, so the window goes back to the
+ * system value and is set again on the way in — which lands on the same answer
+ * either way.
+ */
+@Composable
+private fun ScreenBrightness(brightness: Float?) {
+    val activity = LocalActivity.current
+    DisposableEffect(activity, brightness) {
+        val window = activity?.window
+        window?.setBrightness(brightness)
+        onDispose { window?.setBrightness(null) }
+    }
+}
+
+/**
+ * `-1f` is `BRIGHTNESS_OVERRIDE_NONE`: the window stops having an opinion and
+ * the system's brightness shows through again.
+ */
+private fun Window.setBrightness(brightness: Float?) {
+    attributes = attributes.apply {
+        screenBrightness = brightness ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    }
+}
+
+/**
+ * The brightness or volume readout, while a drag on the picture is adjusting it.
+ *
+ * A bar and a percentage rather than a slider: there is nothing to grab, the
+ * finger is already doing the adjusting somewhere else on the screen, and what
+ * is wanted from this is an answer to "how much", not another control. It sits
+ * in the middle of the picture, where the eye already is.
+ *
+ * Drawn over everything, because it has to be readable against whatever frame
+ * is playing.
+ */
+@Composable
+private fun PlayerLevelOverlay(viewModel: PlayerViewModel) {
+    // Read here rather than passed in, so that a drag recomposes this and not
+    // the whole screen: the state is read inside the smallest composable that
+    // needs it, which is the one that redraws sixty times a second.
+    val feedback = viewModel.level ?: return
+    val percent = (feedback.fraction * 100).roundToInt()
+    val label = stringResource(
+        when (feedback.target) {
+            DragTarget.BRIGHTNESS -> R.string.player_brightness
+            DragTarget.VOLUME -> R.string.player_volume
+        },
+    )
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(PLAYER_INFO_PANEL)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                // One announcement for the whole panel. The icon, the bar and
+                // the digits are the same fact three times over, and none of
+                // the three says it in words.
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "$label $percent%"
+                },
+        ) {
+            Icon(
+                painter = painterResource(
+                    when (feedback.target) {
+                        DragTarget.BRIGHTNESS -> R.drawable.ic_brightness
+                        DragTarget.VOLUME -> R.drawable.ic_volume
+                    },
+                ),
+                contentDescription = null,
+                tint = Color.White,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "$percent%",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+            )
+            Spacer(Modifier.height(8.dp))
+            // The same bar the control bar uses for position, so "how far along
+            // this is" reads the same way in both places.
+            LinearProgressIndicator(
+                progress = { feedback.fraction },
+                color = Color.White,
+                trackColor = Color.White.copy(alpha = 0.3f),
+                modifier = Modifier.width(PLAYER_LEVEL_BAR_WIDTH),
+            )
+        }
+    }
+}
+
+private val PLAYER_LEVEL_BAR_WIDTH = 140.dp
 
 /** Dark enough that white text reads over any frame, transparent enough to see it. */
 private val PLAYER_INFO_PANEL = Color.Black.copy(alpha = 0.8f)
