@@ -17,6 +17,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.hyalos.player.AppContainer
+import com.hyalos.player.data.PlaybackMode
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 import com.hyalos.player.info.DecodeFacts
@@ -198,39 +199,80 @@ class PlayerViewModel(
         )
 
         if (path.isNotEmpty()) {
+            // Watched rather than read once: the mode is a tap away from the
+            // player, and one that only took effect on the next film would look
+            // broken from here.
+            //
+            // One collector for both sources, the hand-built list included. That
+            // list used to be exempt — "a request to play that list through, so
+            // it does not consult the setting at all" — and is not any more,
+            // because the mode is now a button pressed while watching rather
+            // than a preference set beforehand, and a control that a whole class
+            // of playback ignores is worse than the exemption was worth. What
+            // the exemption wanted is what SEQUENCE still does: a playlist plays
+            // through, in order, and stops at the end.
             viewModelScope.launch {
-                if (fromPlaylist) {
-                    // A hand-built list is a request to play that list through,
-                    // so it does not consult the setting at all — not on the way
-                    // in, and not while it plays.
-                    extendPlaylist()
-                } else {
-                    // Watched rather than read once: the setting is a tap away
-                    // from the player, and one that only took effect on the next
-                    // film would look broken from here.
-                    container.settings.settings
-                        .map { it.autoPlayNext }
-                        .distinctUntilChanged()
-                        .collect { enabled -> applyAutoPlayNext(enabled) }
-                }
+                container.settings.settings
+                    .map { it.playbackMode }
+                    .distinctUntilChanged()
+                    .collect { mode -> applyPlaybackMode(mode) }
             }
         }
     }
 
     /**
-     * Follow the setting while the film plays, not only when it starts.
+     * The mode the controller's button is showing.
      *
-     * Turning it off drops the film's neighbours, so it plays to its end and
-     * stops — which is what the setting means, and what used to happen only if
-     * it had been off when the film was opened.
+     * Read back out of the settings rather than kept beside them: the button
+     * writes, the settings file is the record, and the icon is a view of it —
+     * so the icon cannot come to disagree with what the player is doing.
      */
-    private suspend fun applyAutoPlayNext(enabled: Boolean) {
-        if (enabled) {
-            // Only when nothing is queued: extending twice would list the folder
-            // twice.
+    val playbackMode: StateFlow<PlaybackMode> = container.settings.settings
+        .map { it.playbackMode }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlaybackMode.SEQUENCE)
+
+    /**
+     * Move to the next mode, and let the collector above apply it.
+     *
+     * Deliberately does no applying itself. Two paths that both extend the queue
+     * can interleave and queue the same folder twice; one writer, applied in one
+     * place, is what keeps that from being possible.
+     */
+    fun cyclePlaybackMode() {
+        viewModelScope.launch {
+            // Read from the store, not from [playbackMode].value: that one is a
+            // `WhileSubscribed` view and would be the initial default whenever
+            // nothing is collecting it, which turns a tap into "go to the second
+            // mode" instead of "go to the next one".
+            val current = container.settings.settings.first().playbackMode
+            container.settings.setPlaybackMode(current.next)
+        }
+    }
+
+    /**
+     * Follow the mode while the film plays, not only when it starts.
+     *
+     * **Nothing here interrupts the picture.** `repeatMode` is a property, and
+     * the queue is only added to or trimmed at its ends, which leaves the
+     * current item current and its position where it was. Only the first
+     * `ONCE → anything else` costs a listing, and after that the candidates are
+     * already in [candidates].
+     *
+     * `repeatMode` is set on **every** pass, including the ones where the queue
+     * does not change. Leaving it alone because the queue is going back to one
+     * item is how a film ends up repeating forever under a button that says it
+     * will play once.
+     */
+    private suspend fun applyPlaybackMode(mode: PlaybackMode) {
+        player.repeatMode = mode.repeatMode
+
+        if (mode.wantsFullQueue) {
+            // Only when nothing is queued: extending twice would queue the
+            // folder twice.
             if (player.mediaItemCount <= 1) extendPlaylist()
             return
         }
+
         // The tail first: removing what follows does not move the current item,
         // where removing what precedes it would.
         val current = player.currentMediaItemIndex
@@ -240,24 +282,48 @@ class PlayerViewModel(
         if (current > 0) player.removeMediaItems(0, current)
     }
 
+    /** The queue's source once listed. See [extendPlaylist]. */
+    private var candidates: List<MediaItem>? = null
+
     /**
-     * Add the queue around the film that is already playing.
+     * Put the queue around the film that is already playing.
      *
-     * Two sources. A queue the user built by hand is a request to play that
-     * queue, in that order, so it is used as it stands. Otherwise the folder is
-     * the queue — whether there should be one at all is [applyAutoPlayNext]'s
-     * decision, not this function's.
+     * Whether there should be a queue at all is [applyPlaybackMode]'s decision,
+     * not this function's — by the time it is called, the answer is yes.
      */
     private suspend fun extendPlaylist() {
+        val items = candidates ?: buildCandidates()?.also { candidates = it } ?: return
+
+        // Where the **playing** film sits, not where the film that was opened
+        // sat. The cache is the folder as it was listed and the queue may have
+        // moved on since; what `ONCE` trims down to is whatever was playing,
+        // which need not be the one this was built around.
+        val playing = player.currentMediaItem?.localConfiguration?.uri
+        val index = items.indexOfFirst { it.localConfiguration?.uri == playing }
+        if (index < 0) return
+
+        addAround(index, items)
+    }
+
+    /**
+     * The queue's source, listed once and then kept.
+     *
+     * Kept because the queue is now something that comes and goes: `ONCE` trims
+     * it away and the next mode asks for it back, and re-listing the folder
+     * every time would put a network round-trip behind a button press for
+     * nothing. The film cannot change while the player is open, so the answer
+     * cannot go stale.
+     *
+     * Null when the source cannot be read at all.
+     */
+    private suspend fun buildCandidates(): List<MediaItem>? {
         if (fromPlaylist) {
             // The order is the point of a hand-built list, so it is not sorted.
             // Matched by path rather than by name: it is the exact string that
             // was stored, and two folders may hold the same file name.
             val entries = container.playlists.playlist(serverId).first()
-            val index = entries.indexOf(path)
-            if (index < 0) return
-            addAround(index, entries.map { MediaItem.fromUri(KrystallosUri.of(serverId, it)) })
-            return
+            if (path !in entries) return null
+            return entries.map { MediaItem.fromUri(KrystallosUri.of(serverId, it)) }
         }
 
         val settings = container.settings.settings.first()
@@ -269,7 +335,7 @@ class PlayerViewModel(
         } catch (_: Exception) {
             // The film is already playing; a missing queue is not worth
             // interrupting it for.
-            return
+            return null
         }
 
         val playable = EntrySorting.playableInOrder(
@@ -278,12 +344,12 @@ class PlayerViewModel(
             ascending = settings.sortAscending,
             nameOrder = EntrySorting.systemOrder,
         )
-        val current = RemotePath.name(path)
-        val index = playable.indexOfFirst { it.name == current }
-        if (index < 0) return // The server listed something other than what we opened.
+        // The server listed something other than what we opened.
+        if (playable.none { it.name == RemotePath.name(path) }) return null
 
-        val items = playable.map { MediaItem.fromUri(KrystallosUri.of(serverId, RemotePath.join(directory, it.name))) }
-        addAround(index, items)
+        return playable.map {
+            MediaItem.fromUri(KrystallosUri.of(serverId, RemotePath.join(directory, it.name)))
+        }
     }
 
     /**

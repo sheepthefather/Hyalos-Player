@@ -36,7 +36,7 @@ class AppSettingsTest {
         val defaults = AppSettings()
         // Stopping after each episode would read as broken, and distorting or
         // cropping the picture is something a user should choose, not meet.
-        assertEquals(true, defaults.autoPlayNext)
+        assertEquals(PlaybackMode.SEQUENCE, defaults.playbackMode)
         assertEquals(VideoScale.FIT, defaults.videoScale)
     }
 

@@ -34,13 +34,16 @@ data class AppSettings(
     val sortAscending: Boolean = true,
 
     /**
-     * Whether finishing one film starts the next one in the folder.
+     * What the player does when a film ends.
      *
-     * On by default: watching a series folder episode by episode is the case
-     * this exists for, and a player that stopped after each one would read as
-     * broken rather than as a default.
+     * Replaces a boolean "auto play next". That boolean's two states were
+     * "play the folder through" and "stop after this one" — now [PlaybackMode.SEQUENCE]
+     * and [PlaybackMode.ONCE] — and two more were missing entirely.
+     *
+     * It lives here to be remembered, not to be changed here: it is chosen from
+     * the player's own controls, because it is a decision made while watching.
      */
-    val autoPlayNext: Boolean = true,
+    val playbackMode: PlaybackMode = PlaybackMode.SEQUENCE,
 
     /** How video is fitted to the screen. */
     val videoScale: VideoScale = VideoScale.FIT,
@@ -71,6 +74,36 @@ enum class BrowserLayout { LIST, GRID }
 /** What the file browser orders entries by. */
 @Serializable
 enum class SortKey { NAME, DATE, SIZE, TYPE }
+
+/**
+ * What the player does when a film ends.
+ *
+ * Four behaviours, but two decisions: whether the queue is the folder or just
+ * this film, and whether the end of the queue wraps or stops. The mapping onto
+ * those two is in the player package, where the player's own vocabulary lives —
+ * this side stays a plain value that can be stored and read back.
+ *
+ * **The order is meaningful**: it is the order the controller's button cycles
+ * in, and the order they are listed in.
+ *
+ * **Member names are storage.** `encodeDefaults` writes them out and the
+ * settings file is read back by name, so renaming one silently resets it for
+ * everyone who had it.
+ */
+@Serializable
+enum class PlaybackMode {
+    /** The folder, played through, then stopped. */
+    SEQUENCE,
+
+    /** The folder, played through, then started again. */
+    REPEAT_ALL,
+
+    /** This one film, again and again. */
+    REPEAT_ONE,
+
+    /** This one film, then stopped. */
+    ONCE,
+}
 
 /**
  * How video is fitted to the screen.

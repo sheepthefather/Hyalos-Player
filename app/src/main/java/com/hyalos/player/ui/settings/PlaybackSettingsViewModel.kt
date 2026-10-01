@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * The three playback choices that belong to no one file.
+ * The playback choices that belong to no one file.
  *
  * Read once and then written optimistically. "Once" is every visit: the entry's
  * ViewModelStore is cleared when the page is popped, so re-entering builds a
@@ -21,8 +21,15 @@ import kotlinx.coroutines.launch
  */
 class PlaybackSettingsViewModel(private val container: AppContainer) : ViewModel() {
 
-    /** Whether finishing a film starts the next one in its folder. */
-    var autoPlayNext by mutableStateOf(AppSettings().autoPlayNext)
+    /**
+     * What the player does when a film ends — **shown here, chosen there**.
+     *
+     * Read-only on this page on purpose. It is not a preference set in advance
+     * like the two below it: it is a decision made while watching, so the button
+     * is in the player's controls. Showing it here answers "where is that
+     * setting gone", which is otherwise a question the page cannot answer.
+     */
+    var playbackMode by mutableStateOf(AppSettings().playbackMode)
         private set
 
     /** How video is fitted to the screen. */
@@ -36,15 +43,10 @@ class PlaybackSettingsViewModel(private val container: AppContainer) : ViewModel
     init {
         viewModelScope.launch {
             val settings = container.settings.settings.first()
-            autoPlayNext = settings.autoPlayNext
+            playbackMode = settings.playbackMode
             videoScale = settings.videoScale
             initialOrientation = settings.initialOrientation
         }
-    }
-
-    fun onAutoPlayNextChange(enabled: Boolean) {
-        autoPlayNext = enabled
-        viewModelScope.launch { container.settings.setAutoPlayNext(enabled) }
     }
 
     fun onVideoScaleChange(scale: VideoScale) {

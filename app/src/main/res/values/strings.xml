@@ -82,7 +82,7 @@
     <string name="settings_storage">存储</string>
     <string name="settings_about">关于</string>
     <!-- 「方向」而不是「初始方向」：三个值一行，全称会把这一行挤到换行，末字单独成行。 -->
-    <string name="settings_playback_summary">自动播放下一个：%1$s · 画面比例：%2$s · 方向：%3$s</string>
+    <string name="settings_playback_summary">播放模式：%1$s · 画面比例：%2$s · 方向：%3$s</string>
     <string name="settings_storage_summary">缩略图缓存上限：%1$s</string>
     <string name="settings_about_summary">版本 %1$s</string>
     <string name="state_on">开</string>
@@ -119,8 +119,14 @@
 
     <!-- 播放设置 -->
     <string name="settings_playback">播放</string>
-    <string name="settings_auto_next">自动播放下一个</string>
-    <string name="settings_auto_next_hint">当前影片播完后，继续播放同一文件夹里的下一个</string>
+    <string name="settings_playback_mode">播放模式</string>
+    <!-- 这里只显示当前值，不提供修改：改它的按钮在播放器控制栏里。 -->
+    <string name="settings_playback_mode_hint">影片播完后做什么。在播放器的控制栏里切换，不在这里改。</string>
+    <!-- 四个模式名。顺序与 PlaybackMode 的声明顺序一致，也就是控制栏按钮的轮转顺序。 -->
+    <string name="mode_sequence">不循环</string>
+    <string name="mode_repeat_all">循环列表</string>
+    <string name="mode_repeat_one">单曲循环</string>
+    <string name="mode_once">仅播当前</string>
     <string name="settings_video_scale">画面比例</string>
     <string name="settings_video_scale_hint">适应：完整显示，比例不符处留黑边。拉伸：铺满屏幕但画面会变形。裁切：铺满且不变形，但会切掉超出屏幕的部分。</string>
     <string name="scale_fit">适应</string>
@@ -229,6 +235,8 @@
     <!-- Names the direction the button turns *to*, matching its icon. -->
     <string name="player_rotate_to_landscape">切换到横屏</string>
     <string name="player_rotate_to_portrait">切换到竖屏</string>
+    <!-- 控制栏的播放模式按钮。名字说的是当前模式，按钮点一下切到下一个。 -->
+    <string name="player_playback_mode">播放模式：%1$s</string>
 
     <!-- 关于 -->
     <string name="about_version">版本 %1$s</string>

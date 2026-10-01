@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +70,9 @@ import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
 import com.hyalos.player.ui.common.InfoColors
 import com.hyalos.player.ui.common.InfoSectionList
+// The names live with the settings index, which reports the same value. One
+// wording for one thing: the button and the index must read identically.
+import com.hyalos.player.ui.settings.playbackModeLabel
 import kotlinx.coroutines.delay
 
 /**
@@ -156,6 +160,12 @@ fun PlayerScreen(
     // the two values above: the screen can also have been turned by the system,
     // and what the button means is "the other way from what is on screen now".
     val portrait = LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
+    // The mode the controller's button is on, and the name it announces. Read
+    // from the settings, so the icon is a view of the same value the player is
+    // acting on rather than a copy that could drift from it.
+    val playbackMode by viewModel.playbackMode.collectAsState()
+    val playbackModeName = stringResource(playbackModeLabel(playbackMode))
+
     val rotateTarget = if (portrait) PlaybackOrientation.LANDSCAPE else PlaybackOrientation.PORTRAIT
     val rotateLabel = stringResource(
         if (rotateTarget == PlaybackOrientation.LANDSCAPE) {
@@ -223,6 +233,12 @@ fun PlayerScreen(
                             context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
                         )
                     }
+                    // The mode button writes and nothing else: the settings
+                    // collector applies it, so there is one place that touches
+                    // the queue and no way for two of them to disagree.
+                    findViewById<ImageButton>(R.id.player_mode)?.setOnClickListener {
+                        viewModel.cyclePlaybackMode()
+                    }
                 }
             },
             // Applied here rather than in the factory: the factory runs once, so
@@ -238,6 +254,13 @@ fun PlayerScreen(
                         },
                     )
                     button.contentDescription = rotateLabel
+                }
+                // Four modes behind one button, so the icon is all the button
+                // has to say — and the description is what says it out loud.
+                view.findViewById<ImageButton>(R.id.player_mode)?.let { button ->
+                    button.setImageResource(playbackMode.iconRes)
+                    button.contentDescription =
+                        view.context.getString(R.string.player_playback_mode, playbackModeName)
                 }
                 // Upright there is no room for the whole row. Measured: five
                 // 52dp buttons, the time and the two icons on the right come to

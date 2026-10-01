@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "trending_flat", Apache-2.0.
+  Source: symbols/web/trending_flat/materialsymbolsoutlined/trending_flat_24px.svg
+
+  Filled white rather than tinted, for the reason spelled out in
+  `ic_orientation_landscape.xml`: Media3's controller buttons set no
+  `android:tint`, so each icon carries its own colour and a black one would
+  vanish into the controller's dark scrim.
+
+  Shown when the play mode is "sequence": every item in the list is played once,
+  in order, and playback stops when the last one ends. A plain one-way arrow is
+  the honest picture of that — the queue runs out, and nothing curls back to the
+  start the way `ic_mode_repeat_all.xml` does.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="m700-300-57-56 84-84H120v-80h607l-83-84 57-56 179 180-180 180Z" />
+    </group>
+</vector>

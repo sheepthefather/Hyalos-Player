@@ -28,8 +28,8 @@ class SettingsRepository(private val store: DataStore<AppSettings>) {
         store.updateData { it.copy(sortAscending = ascending) }
     }
 
-    suspend fun setAutoPlayNext(enabled: Boolean) {
-        store.updateData { it.copy(autoPlayNext = enabled) }
+    suspend fun setPlaybackMode(mode: PlaybackMode) {
+        store.updateData { it.copy(playbackMode = mode) }
     }
 
     suspend fun setVideoScale(scale: VideoScale) {

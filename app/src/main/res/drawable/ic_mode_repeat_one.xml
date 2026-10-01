@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "repeat_one", Apache-2.0.
+  Source: symbols/web/repeat_one/materialsymbolsoutlined/repeat_one_24px.svg
+
+  Filled white rather than tinted, for the reason spelled out in
+  `ic_orientation_landscape.xml`: Media3's controller buttons set no
+  `android:tint`, so each icon carries its own colour and a black one would
+  vanish into the controller's dark scrim.
+
+  Shown when the play mode is "repeat one": the current item plays again and
+  again and the rest of the list is never reached. It is the loop of
+  `ic_mode_repeat_all.xml` with a "1" sitting inside it, which is exactly the
+  distinction between the two modes — the same circle, a different number of
+  items travelling round it.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M460-360v-180h-60v-60h120v240h-60ZM280-80 120-240l160-160 56 58-62 62h406v-160h80v240H274l62 62-56 58Zm-80-440v-240h486l-62-62 56-58 160 160-160 160-56-58 62-62H280v160h-80Z" />
+    </group>
+</vector>

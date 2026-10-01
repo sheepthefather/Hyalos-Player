@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  COMPOSED, not a single Material glyph. Two pieces, both traced from Material's
+  filled icon set (Apache-2.0):
+    * the play triangle from material-icons `play_arrow` (av),
+    * the stop block    from material-icons `stop`       (av).
+
+  Filled white rather than tinted, for the reason spelled out in
+  `ic_orientation_landscape.xml`: Media3's controller buttons set no
+  `android:tint`, so each icon carries its own colour and a black one would
+  vanish into the controller's dark scrim.
+
+  WHY A COMPOSITE. There is no Material glyph for "play only this one, then
+  stop". The obvious names do not exist in the repo — `play_once`, `single_play`
+  and `repeat_off` all 404 under symbols/web/ — and the glyphs that do exist
+  mean something else (`replay` loops, `repeat_one` keeps repeating, `skip_next`
+  moves on). So the picture is built from two shapes instead: a play triangle
+  for "this one plays", and a stop block for "and then it stops". Read left to
+  right it is the whole mode.
+
+  WHY A STOP BLOCK AND NOT A BAR. A triangle followed by a thin vertical bar is
+  Material's own `skip_next`, and in a transport bar a lone bar next to a
+  triangle also reads as pause. A solid block is not used that way by anything
+  else, so "play, then stop" stays unambiguous. That is the only reason; the
+  shape is otherwise an ordinary square.
+
+  THE GEOMETRY. Both pieces are the source glyphs scaled x24 from their 24-unit
+  grid into this 960 viewport, then shifted, so nothing here is eyeballed:
+    play_arrow `M8 5v14l11-7z`   -> (8,5) (8,19) (19,12)  -> x24 + (-24, 192)
+                                  -> (168,312) (168,648) (432,480)
+    stop       `M6 6h12v12H6z`   -> (6,6) (18,18)         -> x24 + (360, 192)
+                                  -> (504,336) .. (792,624)
+  Content spans x 168..792 and y 312..648: centred on (480,480), and about the
+  same size as `ic_mode_sequence.xml`, which is the other wide glyph in this set.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- play_arrow: the triangle, on the left. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M168 312L168 648L432 480Z" />
+    <!-- stop: the block, on the right. -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M504 336H792V624H504Z" />
+</vector>

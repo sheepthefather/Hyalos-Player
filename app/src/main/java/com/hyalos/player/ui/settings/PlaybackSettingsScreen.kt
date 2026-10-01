@@ -54,21 +54,20 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel, onBack: () -> U
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_auto_next), style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        stringResource(R.string.settings_auto_next_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = viewModel.autoPlayNext,
-                    onCheckedChange = viewModel::onAutoPlayNextChange,
-                    modifier = Modifier.padding(start = 16.dp),
-                )
-            }
+            Text(stringResource(R.string.settings_playback_mode), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                stringResource(R.string.settings_playback_mode_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            // The value, not a control. It is set from the button in the
+            // player's controls, while watching; showing it here answers "where
+            // did that switch go" instead of leaving a blank.
+            Text(
+                stringResource(playbackModeLabel(viewModel.playbackMode)),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
 
             HorizontalDivider()
 
