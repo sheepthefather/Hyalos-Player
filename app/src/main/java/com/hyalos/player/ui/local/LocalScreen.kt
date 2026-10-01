@@ -4,38 +4,47 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.hyalos.player.R
 import com.hyalos.player.data.LocalSource
-import com.hyalos.player.ui.browser.BrowserScreen
-import com.hyalos.player.ui.browser.BrowserViewModel
 import com.hyalos.player.ui.common.CenteredMessage
+import java.io.File
 
 /**
- * The local tab: the device's own storage, or the one screen that asks for it.
+ * The local tab: the places worth starting from, or the one screen that asks for
+ * the permission to reach them.
  *
- * There is no second browser behind this. Once the permission is there, this is
- * [BrowserScreen] over a session whose source is the device — the same list, the
- * same grid, the same sort, the same search, the same player. The only thing
+ * A list rather than the browser itself, so the tab reads like the servers one —
+ * pick a place, then browse it. There is still no second browser behind this: a
+ * place opens `Route.Browse` over the local session, which is the same browser,
+ * the same grid, the same sort and the same player a server gets. The only thing
  * that differs is what `SessionManager` hands the kernel.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LocalScreen(
-    viewModel: BrowserViewModel,
-    onOpenDirectory: (path: String) -> Unit,
-    onPlay: (path: String) -> Unit,
-    onJumpTo: (path: String) -> Unit,
-) {
+fun LocalScreen(onOpenPlace: (path: String) -> Unit) {
     var granted by remember { mutableStateOf(LocalSource.granted()) }
 
     // Re-checked when this screen comes back. The permission is granted on a
@@ -43,19 +52,33 @@ fun LocalScreen(
     // moment the answer can have changed — and returning from it is a resume.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { granted = LocalSource.granted() }
 
-    if (granted) {
-        BrowserScreen(
-            viewModel = viewModel,
-            onOpenDirectory = onOpenDirectory,
-            onPlay = onPlay,
-            onJumpTo = onJumpTo,
-            // Nowhere above this to go back to, and no server to edit: this
-            // screen *is* the tab's root, and the source is the device.
-            onEditServer = null,
-            onBack = null,
-        )
-    } else {
+    if (!granted) {
         LocalPermission()
+        return
+    }
+
+    // Read once per grant rather than per composition: it touches the
+    // filesystem, and the answer cannot change while the screen is up — the
+    // permission is granted on a settings screen, and coming back from it is
+    // what re-runs this.
+    val places = remember(granted) {
+        placesThatExist { File(LocalSource.root, it).isDirectory }
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.tab_local)) }) },
+    ) { insets ->
+        LazyColumn(Modifier.fillMaxSize().padding(insets)) {
+            items(places, key = { it.path() }) { place ->
+                ListItem(
+                    headlineContent = { Text(stringResource(place.label)) },
+                    leadingContent = {
+                        Icon(painterResource(place.icon), contentDescription = null)
+                    },
+                    modifier = Modifier.clickable { onOpenPlace(place.path()) },
+                )
+            }
+        }
     }
 }
 

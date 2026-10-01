@@ -194,21 +194,14 @@ private fun RouteStack(
                 )
             }
             entry<Route.Local> {
-                LocalScreen(
-                    // The session's own root is "/" — LocalSource.root only
-                    // decides which directory the kernel is pointed at, and the
-                    // paths on this stack are relative to it, exactly as a
-                    // server's share is.
-                    viewModel = viewModel {
-                        BrowserViewModel(container, LocalSource.ID, "/")
-                    },
-                    onOpenDirectory = { backStack.add(Route.Browse(LocalSource.ID, it)) },
-                    onPlay = { backStack.add(Route.Play(LocalSource.ID, it)) },
-                    onJumpTo = {
-                        val target = Route.Browse(LocalSource.ID, it)
-                        backStack.replaceWith(jumpTo(backStack.filterIsInstance<Route>(), target))
-                    },
-                )
+                // A place opens the ordinary browse route over the local
+                // session — the same one a server opens, which is why nothing
+                // here has to know about browsing, playing or jumping within a
+                // directory. The session's root is "/": `LocalSource.root` only
+                // decides which directory the kernel is pointed at, and the
+                // paths on this stack are relative to it, exactly as a server's
+                // share is.
+                LocalScreen(onOpenPlace = { backStack.add(Route.Browse(LocalSource.ID, it)) })
             }
             entry<Route.Playlists> {
                 PlaylistServersScreen(

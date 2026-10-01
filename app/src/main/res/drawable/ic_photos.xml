@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "image", Apache-2.0.
+  Source: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/image/materialsymbolsoutlined/image_24px.svg
+
+  Path data is byte-for-byte the upstream `d` attribute. The source viewBox is
+  already "0 -960 960 960" — the same 960 grid this drawable uses — so there is
+  no rescaling here (nothing x40 or otherwise): the glyph is moved into the
+  viewport with a single translateY, exactly as `ic_brightness.xml` does.
+
+  `photo_library` was fetched as the alternative and rejected: it is two
+  overlapping frames with the landscape tucked into the front one, and at 24dp
+  that inner mountain collapses into the frame edge. `image` is a single frame
+  with the same landscape, so it stays legible at the size this list actually
+  draws it and still says "pictures" on its own.
+
+  Filled white, not tinted, for the reason spelled out in
+  `ic_orientation_landscape.xml`: these icons are read by views that set no
+  `android:tint`, so each icon carries its own colour, and anything but white
+  would disappear against the dark background the shortcut list is drawn on.
+
+  Shown as the leading mark of the "图片" (Pictures) shortcut row in the
+  quick-directory list on the Local Files tab; tapping the row jumps the file
+  browser to the Pictures directory. A framed landscape is the conventional
+  "image" mark, and it is distinct from `ic_camera.xml` beside it, which is a
+  camera body rather than a frame.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm40-80h480L570-480 450-320l-90-120-120 160Zm-40 80v-560 560Z" />
+    </group>
+</vector>
