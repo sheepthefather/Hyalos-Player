@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyalos.player.R
@@ -82,6 +83,23 @@ fun EntryList(
     onClick: (EntryRow) -> Unit,
     onLongClick: (EntryRow) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * How much room the leading slot takes.
+     *
+     * A thumbnail's by default, because most rows in a file browser have one and
+     * the names then line up down the column whether or not a given row does.
+     *
+     * A list whose rows are **all** icons — the local tab's places — should pass
+     * an icon's size instead. A thumbnail's worth of room in front of a picture
+     * that is never coming leaves the icon marooned in the middle of an empty
+     * slot, which reads as a wide left margin and is what it is.
+     *
+     * Deliberately a parameter and not something worked out from the rows: a
+     * list that re-indented itself depending on whether its contents happened
+     * to have thumbnails would put the text in a different place from one
+     * directory to the next.
+     */
+    leadingSize: DpSize = DpSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT),
 ) {
     val state = rememberLazyListState()
     Box(modifier.fillMaxSize()) {
@@ -113,7 +131,7 @@ fun EntryList(
                             ThumbnailFrame(
                                 row,
                                 loadThumbnail,
-                                Modifier.size(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT),
+                                Modifier.size(leadingSize),
                                 // A row with nothing to show shows its icon
                                 // bare; the slot is still reserved, so names
                                 // still line up down the column.
