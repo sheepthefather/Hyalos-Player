@@ -4,7 +4,6 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.hyalos.player.R
-import com.hyalos.player.data.PlaybackMode
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
 
@@ -36,24 +35,6 @@ internal val ORIENTATIONS = listOf(
 @StringRes
 internal fun orientationLabel(orientation: PlaybackOrientation): Int =
     ORIENTATIONS.first { (value, _) -> value == orientation }.second
-
-/**
- * In the order they are shown, which is [PlaybackMode]'s own order — the order
- * the player's button cycles in, so the list here and the button there agree.
- *
- * Here rather than only in the player because the settings index reports the
- * mode it is currently on, and that has to read exactly as the player names it.
- */
-internal val PLAYBACK_MODES = listOf(
-    PlaybackMode.SEQUENCE to R.string.mode_sequence,
-    PlaybackMode.REPEAT_ALL to R.string.mode_repeat_all,
-    PlaybackMode.REPEAT_ONE to R.string.mode_repeat_one,
-    PlaybackMode.ONCE to R.string.mode_once,
-)
-
-@StringRes
-internal fun playbackModeLabel(mode: PlaybackMode): Int =
-    PLAYBACK_MODES.first { (value, _) -> value == mode }.second
 
 @Composable
 internal fun cacheLimitLabel(megabytes: Int): String =

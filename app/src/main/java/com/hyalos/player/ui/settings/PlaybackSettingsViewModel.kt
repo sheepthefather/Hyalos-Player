@@ -21,17 +21,6 @@ import kotlinx.coroutines.launch
  */
 class PlaybackSettingsViewModel(private val container: AppContainer) : ViewModel() {
 
-    /**
-     * What the player does when a film ends — **shown here, chosen there**.
-     *
-     * Read-only on this page on purpose. It is not a preference set in advance
-     * like the two below it: it is a decision made while watching, so the button
-     * is in the player's controls. Showing it here answers "where is that
-     * setting gone", which is otherwise a question the page cannot answer.
-     */
-    var playbackMode by mutableStateOf(AppSettings().playbackMode)
-        private set
-
     /** How video is fitted to the screen. */
     var videoScale by mutableStateOf(AppSettings().videoScale)
         private set
@@ -43,7 +32,6 @@ class PlaybackSettingsViewModel(private val container: AppContainer) : ViewModel
     init {
         viewModelScope.launch {
             val settings = container.settings.settings.first()
-            playbackMode = settings.playbackMode
             videoScale = settings.videoScale
             initialOrientation = settings.initialOrientation
         }

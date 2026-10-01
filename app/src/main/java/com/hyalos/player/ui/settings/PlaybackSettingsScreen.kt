@@ -54,20 +54,10 @@ fun PlaybackSettingsScreen(viewModel: PlaybackSettingsViewModel, onBack: () -> U
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(stringResource(R.string.settings_playback_mode), style = MaterialTheme.typography.bodyLarge)
-            Text(
-                stringResource(R.string.settings_playback_mode_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // The value, not a control. It is set from the button in the
-            // player's controls, while watching; showing it here answers "where
-            // did that switch go" instead of leaving a blank.
-            Text(
-                stringResource(playbackModeLabel(viewModel.playbackMode)),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            // The playback mode is not here at all. It is not a preference set
+            // in advance like the two below it — it is a decision made while
+            // watching, so it lives in the player's top bar, and a read-only
+            // copy here was only ever an apology for a switch that had gone.
 
             HorizontalDivider()
 

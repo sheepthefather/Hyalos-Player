@@ -110,7 +110,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
-        android:layout_marginEnd="@dimen/player_custom_button_room"
+        android:layout_marginEnd="@dimen/exo_small_icon_width"
         android:layoutDirection="ltr">
 
       <ImageButton android:id="@id/exo_vr"
@@ -143,7 +143,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
-        android:layout_marginEnd="@dimen/player_custom_button_room"
+        android:layout_marginEnd="@dimen/exo_small_icon_width"
         android:visibility="invisible">
 
       <LinearLayout android:id="@id/exo_extra_controls"
@@ -213,23 +213,6 @@
           style="@style/ExoStyledControls.Button.Bottom"
           android:src="@drawable/ic_orientation_landscape"
           android:contentDescription="@string/player_rotate_to_landscape" />
-
-      <!-- DEPARTURE 4: the playback mode, in the same group as the rotate
-           button rather than a second `center_vertical|end` group of its own.
-           Two groups with the same gravity are two views in the same place, so
-           the second one simply covers the first.
-
-           Four modes, one button: it cycles, and the icon and description are
-           replaced from Compose as the mode changes.
-
-           `exo_repeat_toggle` is left unused. It has three states
-           (off/all/one), cannot express "only this one", and would write
-           `repeatMode` behind the ViewModel's back. -->
-      <ImageButton
-          android:id="@+id/player_mode"
-          style="@style/ExoStyledControls.Button.Bottom"
-          android:src="@drawable/ic_mode_sequence"
-          android:contentDescription="@string/mode_sequence" />
 
     </LinearLayout>
 

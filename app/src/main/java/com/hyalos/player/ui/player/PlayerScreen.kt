@@ -70,9 +70,6 @@ import com.hyalos.player.data.VideoScale
 import com.hyalos.player.playback.PlaybackErrors
 import com.hyalos.player.ui.common.InfoColors
 import com.hyalos.player.ui.common.InfoSectionList
-// The names live with the settings index, which reports the same value. One
-// wording for one thing: the button and the index must read identically.
-import com.hyalos.player.ui.settings.playbackModeLabel
 import kotlinx.coroutines.delay
 
 /**
@@ -164,7 +161,7 @@ fun PlayerScreen(
     // from the settings, so the icon is a view of the same value the player is
     // acting on rather than a copy that could drift from it.
     val playbackMode by viewModel.playbackMode.collectAsState()
-    val playbackModeName = stringResource(playbackModeLabel(playbackMode))
+    val playbackModeName = stringResource(playbackMode.labelRes)
 
     val rotateTarget = if (portrait) PlaybackOrientation.LANDSCAPE else PlaybackOrientation.PORTRAIT
     val rotateLabel = stringResource(
@@ -233,12 +230,6 @@ fun PlayerScreen(
                             context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
                         )
                     }
-                    // The mode button writes and nothing else: the settings
-                    // collector applies it, so there is one place that touches
-                    // the queue and no way for two of them to disagree.
-                    findViewById<ImageButton>(R.id.player_mode)?.setOnClickListener {
-                        viewModel.cyclePlaybackMode()
-                    }
                 }
             },
             // Applied here rather than in the factory: the factory runs once, so
@@ -254,13 +245,6 @@ fun PlayerScreen(
                         },
                     )
                     button.contentDescription = rotateLabel
-                }
-                // Four modes behind one button, so the icon is all the button
-                // has to say — and the description is what says it out loud.
-                view.findViewById<ImageButton>(R.id.player_mode)?.let { button ->
-                    button.setImageResource(playbackMode.iconRes)
-                    button.contentDescription =
-                        view.context.getString(R.string.player_playback_mode, playbackModeName)
                 }
                 // Upright there is no room for the whole row. Measured: five
                 // 52dp buttons, the time and the two icons on the right come to
@@ -316,7 +300,7 @@ fun PlayerScreen(
                 ) {
                     Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back))
                 }
-                // Two on the right, so a row rather than a single button — and
+                // Three on the right, so a row rather than a single button — and
                 // the title's clearance is measured from the wider side, or it
                 // would sit under one of them.
                 Row(
@@ -328,6 +312,20 @@ fun PlayerScreen(
                         colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
                     ) {
                         Icon(painterResource(R.drawable.ic_info), stringResource(R.string.player_info))
+                    }
+                    // Between the other two, and here rather than down in the
+                    // control bar's row of transport buttons: those are about
+                    // this film — play, seek, next — and this is about what
+                    // happens after it. It sits with the other two "about the
+                    // playback" buttons instead.
+                    IconButton(
+                        onClick = viewModel::cyclePlaybackMode,
+                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
+                    ) {
+                        Icon(
+                            painterResource(playbackMode.iconRes),
+                            stringResource(R.string.player_playback_mode, playbackModeName),
+                        )
                     }
                     IconButton(
                         onClick = onOpenSettings,
@@ -403,11 +401,11 @@ private val TOP_BAR_HEIGHT = 56.dp
 
 /**
  * Clearance for the buttons either side of the title, so it never sits under
- * one. Two 48dp buttons plus the row's own padding, on the side that has two:
- * the padding is symmetric, so this is what keeps the title centred on the
- * screen rather than on the gap between unequal ends.
+ * one. Three 48dp buttons plus the row's own padding, on the side that has
+ * three: the padding is symmetric, so this is what keeps the title centred on
+ * the screen rather than on the gap between unequal ends.
  */
-private val TOP_BAR_BUTTON_ROOM = 112.dp
+private val TOP_BAR_BUTTON_ROOM = 160.dp
 
 /**
  * How often the remaining-time readout is rewritten.

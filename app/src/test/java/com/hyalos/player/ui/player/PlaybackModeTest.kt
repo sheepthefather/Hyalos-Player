@@ -108,6 +108,13 @@ class PlaybackModeTest {
         assertEquals(icons.size, icons.toSet().size)
     }
 
+    /** The same slip as the icons, one step further out. */
+    @Test
+    fun every_mode_has_its_own_name() {
+        val names = PlaybackMode.values().map { it.labelRes }
+        assertEquals(names.size, names.toSet().size)
+    }
+
     @Test
     fun the_default_mode_plays_the_folder() {
         assertEquals(PlaybackMode.SEQUENCE, AppSettings().playbackMode)

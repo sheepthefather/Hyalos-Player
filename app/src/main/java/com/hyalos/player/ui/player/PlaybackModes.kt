@@ -1,6 +1,7 @@
 package com.hyalos.player.ui.player
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.media3.common.Player
 import com.hyalos.player.R
 import com.hyalos.player.data.PlaybackMode
@@ -50,6 +51,24 @@ internal val PlaybackMode.wantsFullQueue: Boolean
  * two that play the folder are adjacent, and the two that play one film are
  * adjacent, and no mode is ever more than three taps away.
  */
+/**
+ * The modes' names, in the order they are cycled in.
+ *
+ * Here rather than beside the settings, where they started: the mode is chosen
+ * from the player's top bar and is shown nowhere else, so the names belong with
+ * the thing that says them.
+ */
+internal val PLAYBACK_MODES = listOf(
+    PlaybackMode.SEQUENCE to R.string.mode_sequence,
+    PlaybackMode.REPEAT_ALL to R.string.mode_repeat_all,
+    PlaybackMode.REPEAT_ONE to R.string.mode_repeat_one,
+    PlaybackMode.ONCE to R.string.mode_once,
+)
+
+@get:StringRes
+internal val PlaybackMode.labelRes: Int
+    get() = PLAYBACK_MODES.first { (value, _) -> value == this }.second
+
 /**
  * The controller button's icon for this mode.
  *

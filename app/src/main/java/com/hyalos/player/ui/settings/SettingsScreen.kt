@@ -68,7 +68,6 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_playback),
                 summary = stringResource(
                     R.string.settings_playback_summary,
-                    stringResource(playbackModeLabel(settings.playbackMode)),
                     stringResource(scaleLabel(settings.videoScale)),
                     stringResource(orientationLabel(settings.initialOrientation)),
                 ),
