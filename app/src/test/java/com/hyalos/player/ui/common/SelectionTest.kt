@@ -75,4 +75,57 @@ class SelectionTest {
         // button that has nothing to delete.
         assertFalse(Selection.all(emptyList()).active)
     }
+
+    // ---------------------------------------------------------------------
+    // The order, which nothing used to look at and now something does.
+    //
+    // Every assertion above is on a `Set`, so none of them would notice if the
+    // order changed. Adding a selection to the playlist queues it in this order,
+    // so these are the tests that would catch a switch to something unordered.
+
+    @Test
+    fun `the order picked is the order kept`() {
+        val selection = Selection.NONE.select("/c").toggle("/a").toggle("/b")
+
+        assertEquals(listOf("/c", "/a", "/b"), selection.ids.toList())
+    }
+
+    /** Re-picking is picking again: it goes to the end, not back where it was. */
+    @Test
+    fun `turning one off and on again puts it last`() {
+        val selection = Selection.NONE.select("/a").toggle("/b").toggle("/c")
+
+        val reordered = selection.toggle("/a").toggle("/a")
+
+        assertEquals(listOf("/b", "/c", "/a"), reordered.ids.toList())
+    }
+
+    /** Toggling one off leaves the rest where they were. */
+    @Test
+    fun `turning one off keeps the others in order`() {
+        val selection = Selection.NONE.select("/a").toggle("/b").toggle("/c")
+
+        assertEquals(listOf("/a", "/c"), selection.toggle("/b").ids.toList())
+    }
+
+    @Test
+    fun `picking the same one twice does not move it`() {
+        val selection = Selection.NONE.select("/a").toggle("/b").select("/a")
+
+        assertEquals(listOf("/a", "/b"), selection.ids.toList())
+    }
+
+    @Test
+    fun `pruning keeps the survivors in their order`() {
+        val selection = Selection.NONE.select("/a").toggle("/b").toggle("/c")
+
+        assertEquals(listOf("/a", "/c"), selection.prune(setOf("/a", "/c")).ids.toList())
+    }
+
+    @Test
+    fun `select-all keeps the order it was given`() {
+        val selection = Selection.all(listOf("/z", "/a", "/m"))
+
+        assertEquals(listOf("/z", "/a", "/m"), selection.ids.toList())
+    }
 }

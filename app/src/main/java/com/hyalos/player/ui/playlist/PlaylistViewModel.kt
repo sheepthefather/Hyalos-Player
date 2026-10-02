@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.hyalos.player.AppContainer
 import com.hyalos.player.data.BrowserLayout
+import com.hyalos.player.data.moved
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.thumbnails.ThumbnailKey
 import com.hyalos.player.ui.browser.BrowserItem
@@ -70,6 +71,26 @@ class PlaylistViewModel(
     /** A removal waiting on confirmation. */
     var confirmingRemove by mutableStateOf(false)
         private set
+
+    /**
+     * Put the entry at [from] where [to] is, and remember it.
+     *
+     * **The screen is told first and the disk second.** The drag has already
+     * moved the row by the time this runs, so a list that showed the old order
+     * for the round-trip to the store would snap back under the finger. The
+     * store then emits the same order a moment later, which changes nothing on
+     * screen — the two agree.
+     *
+     * An index the list does not have is dropped rather than clamped: the row
+     * would be left where the drag put it until the next emission puts it back,
+     * which is the honest outcome for a position that should not exist.
+     */
+    fun reorder(from: Int, to: Int) {
+        val loaded = state as? State.Loaded ?: return
+        val reordered = loaded.paths.moved(from, to) ?: return
+        state = State.Loaded(reordered.map { it.toRow() }, reordered)
+        viewModelScope.launch { container.playlists.move(serverId, from, to) }
+    }
 
     init {
         viewModelScope.launch {

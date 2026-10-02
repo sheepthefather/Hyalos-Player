@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "drag_handle", Apache-2.0.
+  Source: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/drag_handle/materialsymbolsoutlined/drag_handle_24px.svg
+
+  Path data is byte-for-byte the upstream `d` attribute. The source viewBox is
+  already "0 -960 960 960" — the same 960 grid this drawable uses — so there is
+  no rescaling here (nothing x40 or otherwise): the glyph is moved into the
+  viewport with a single translateY, exactly as `ic_download.xml` does.
+
+  THE GEOMETRY, for the "is it too thin at 24dp?" question. The glyph is two
+  bars, each 640 wide x 80 tall, spanning x 160..800 and y -600..-360:
+    upper bar  M160-520 ... y -600..-520
+    lower bar  M160-360 ... y -440..-360
+  An 80/960 bar is 2.0dp at 24dp — the ordinary Material stroke weight at this
+  size (the tray bar in `ic_download.xml` is also 80 units, i.e. 2dp), and the
+  gap between the two bars is likewise 80 units. So the lines are not thinned
+  by the grid conversion; they are standard weight. What makes the glyph read
+  as delicate is that it is only two bars — the ink covers a 16dp x 6dp patch
+  in the middle of the box — not the bar thickness.
+
+  Filled white, not tinted, as the convention spelled out in
+  `ic_orientation_landscape.xml` requires for this icon set. Note that the one
+  call site so far, the reorder handle of a playlist entry row in
+  `ui/common/EntryList.kt`, does pass `tint = onSurfaceVariant`, which overrides
+  this fill; the hard-coded white keeps the file consistent with its neighbours
+  and is what would show anywhere that does not tint.
+
+  Shown at the trailing end of a row inside the playlist / queue list, as the
+  grip for reordering: the drag gesture is attached to this handle alone, so
+  touching the rest of the row still does what it always did. Two stacked bars
+  are the conventional "drag to move" mark.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M160-360v-80h640v80H160Zm0-160v-80h640v80H160Z" />
+    </group>
+</vector>

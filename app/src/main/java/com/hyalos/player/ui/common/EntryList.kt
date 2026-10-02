@@ -39,12 +39,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hyalos.player.R
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import com.hyalos.player.thumbnails.ThumbnailKey
 
 /**
@@ -100,8 +103,28 @@ fun EntryList(
      * directory to the next.
      */
     leadingSize: DpSize = DpSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT),
+    /**
+     * When given, every row carries a handle and can be dragged to a new place.
+     * Called with the two positions once the finger is lifted.
+     *
+     * Off by default, and only the playlist turns it on. The browser and the
+     * local tab draw the same list and have no order to change — theirs is the
+     * folder's — so a handle there would be an invitation to rearrange something
+     * that has no arrangement.
+     *
+     * **The handle, not the row.** Long-pressing the row is already how every
+     * one of these lists enters its selection mode, and a list where long-press
+     * sometimes selects and sometimes picks the row up would be a list nobody
+     * could predict.
+     */
+    onReorder: ((from: Int, to: Int) -> Unit)? = null,
 ) {
     val state = rememberLazyListState()
+    // Created whether or not anything can be dragged, so the list below is one
+    // implementation rather than two. With no handle attached it does nothing.
+    val reorderState = rememberReorderableLazyListState(state) { from, to ->
+        onReorder?.invoke(from.index, to.index)
+    }
     Box(modifier.fillMaxSize()) {
         LazyColumn(state = state, modifier = Modifier.fillMaxSize()) {
             // Keyed by id, not by name: a playlist may hold the same file name
@@ -109,8 +132,12 @@ fun EntryList(
             // items.
             items(items, key = { it.id }) { row ->
                 val isSelected = row.id in selected
+                ReorderableItem(reorderState, key = row.id, enabled = onReorder != null) { _ ->
                 ListItem(
                     modifier = Modifier
+                        // Only does anything with keys, which this list has. It
+                        // is what slides the rows the dragged one passes.
+                        .animateItem()
                         .combinedClickable(
                             onClick = { onClick(row) },
                             onLongClick = { onLongClick(row) },
@@ -144,7 +171,24 @@ fun EntryList(
                         Text(row.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     },
                     supportingContent = row.detail?.let { { Text(it) } },
+                    trailingContent = if (onReorder == null) {
+                        null
+                    } else {
+                        {
+                            Icon(
+                                painterResource(R.drawable.ic_drag_handle),
+                                stringResource(R.string.playlist_reorder_handle),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                // The gesture is on the handle alone, so pressing
+                                // the row anywhere else still does what it did.
+                                modifier = Modifier
+                                    .draggableHandle()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                            )
+                        }
+                    },
                 )
+                }
             }
         }
         ScrollBar(state, Modifier.align(Alignment.CenterEnd))

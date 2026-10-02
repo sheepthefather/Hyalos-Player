@@ -17,6 +17,20 @@ package com.hyalos.player.ui.common
  */
 data class Selection(
     val active: Boolean = false,
+    /**
+     * The selected identifiers, **in the order they were picked**.
+     *
+     * The order is meaningful and is relied on: adding a selection to the
+     * playlist puts them in the list in exactly this order, so picking episode
+     * three and then episode one queues three first. It is not incidental —
+     * Kotlin documents that `+`, `-`, `intersect` and `toSet()` all preserve
+     * iteration order, and that is the whole reason a `Set` is enough here.
+     *
+     * Replacing this with something unordered — a `HashSet`, or a `Set` built by
+     * a different route — would not fail to compile. It would silently start
+     * queueing films in whatever order the hash happened to give, which is why
+     * this is written down.
+     */
     val ids: Set<String> = emptySet(),
 ) {
     /** A long press: select this one and enter the mode. */

@@ -38,9 +38,12 @@ import com.hyalos.player.ui.common.EntryList
  * *are* — this screen cannot open a folder, rename, copy or paste, and its only
  * action takes an entry out of the list without touching the file.
  *
- * There is no sort menu. The order is the order they were added, which is also
- * the order they play in; re-ordering the view would make the screen disagree
- * with what comes next.
+ * There is no sort menu, and there will not be one: sorting would show an order
+ * that is not the order they play in, and this screen's whole job is to be the
+ * queue. **The order is dragged instead** — the handle on each row moves one
+ * entry, and the move is written to the store, so the screen and the queue stay
+ * the same thing. That distinction is why a sort menu was refused here and a
+ * drag was not: a sort is a *view*, and this list has no view to differ from.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -128,6 +131,12 @@ fun PlaylistScreen(
                         onClick = { viewModel.onTap(it.id) { onPlay(it.id) } },
                         onLongClick = { viewModel.onLongPress(it.id) },
                         modifier = modifier,
+                        // The one list in the app whose order is the user's to
+                        // set. The grid beside it does not take this: reordering
+                        // tiles is a different gesture with a different feel, and
+                        // a queue is a sequence — one column is how a sequence is
+                        // read.
+                        onReorder = viewModel::reorder,
                     )
                 }
         }

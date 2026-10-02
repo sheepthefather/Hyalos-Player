@@ -43,6 +43,11 @@ coroutines = "1.11.0"
 # JNA must be the `aar` variant, not the jar. See app/build.gradle.kts.
 jna = "5.19.1"
 
+# Drag-to-reorder for the playlist. Chosen over writing one because the piece
+# that is easy to leave out — auto-scrolling when the finger reaches the edge —
+# is the piece a long playlist cannot do without, and this library has it.
+reorderable = "2.5.1"
+
 # Tests
 junit = "4.13.2"
 androidxTestRunner = "1.7.0"
@@ -57,6 +62,7 @@ mockito = "5.24.0"
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 compose-ui = { group = "androidx.compose.ui", name = "ui" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }

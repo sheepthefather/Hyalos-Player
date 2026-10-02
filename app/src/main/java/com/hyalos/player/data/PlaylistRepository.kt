@@ -57,6 +57,26 @@ class PlaylistRepository(private val store: DataStore<Playlists>) {
         return added
     }
 
+    /**
+     * Move the entry at [from] to [to], by position.
+     *
+     * By position rather than by path, because that is what a drag produces: the
+     * screen knows which row was picked up and where it was dropped, and has to
+     * look the path up to say so. Doing the lookup here would mean this method
+     * owning a list the caller already has.
+     *
+     * Out-of-range indices are ignored rather than clamped. A drag that reports a
+     * position outside the list is a bug somewhere, and quietly treating it as
+     * "the end" would hide it behind a plausible-looking result.
+     */
+    suspend fun move(serverId: String, from: Int, to: Int) {
+        store.updateData { all ->
+            val existing = all.byServer[serverId] ?: return@updateData all
+            val reordered = existing.moved(from, to) ?: return@updateData all
+            all.copy(byServer = all.byServer + (serverId to reordered))
+        }
+    }
+
     /** Remove [paths] in one update — one write for a whole selection, not one each. */
     suspend fun removeAll(serverId: String, paths: List<String>) {
         if (paths.isEmpty()) return
@@ -123,4 +143,25 @@ internal fun appended(existing: List<String>, added: List<String>): Appended {
         }
     }
     return Appended(merged, count)
+}
+
+/**
+ * [this] with the element at [from] taken out and put back in at [to].
+ *
+ * Null when either index is outside the list, so the caller can decline to write
+ * rather than write a guess. An index equal to `size` is *not* allowed: the
+ * entry being moved is still in the list when the caller works out where it
+ * lands, so a valid destination is always an index that exists.
+ *
+ * The removal happens first and the insertion is measured against the shortened
+ * list, which is what makes a move to the right work: taking the element out
+ * shifts everything after it down one, so "insert at 4" after removing from 1 is
+ * the same place the eye saw when the finger let go.
+ */
+internal fun <T> List<T>.moved(from: Int, to: Int): List<T>? {
+    if (from !in indices || to !in indices) return null
+    if (from == to) return this
+    val next = toMutableList()
+    next.add(to, next.removeAt(from))
+    return next
 }

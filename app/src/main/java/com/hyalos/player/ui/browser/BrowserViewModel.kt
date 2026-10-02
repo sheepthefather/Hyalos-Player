@@ -370,7 +370,18 @@ class BrowserViewModel(
      * over in silence, so the numbers on screen add up to what was selected.
      */
     fun addToPlaylist() {
-        val chosen = (state as? State.Loaded)?.items.orEmpty().filter { it.name in selected }
+        // **In the order they were picked, not the order they are shown.**
+        //
+        // This is the one bulk action that builds a *sequence* rather than
+        // acting on a set — a playlist is played through in the order it was
+        // built — so the order the films were chosen in is the order that was
+        // meant. Every other bulk action here (delete, copy, cut) goes through
+        // `selectedItems()` and the order it produces does not matter.
+        //
+        // Looked up in the listing rather than iterated from it: the selection
+        // carries the order, the listing carries everything else about the item.
+        val byName = (state as? State.Loaded)?.items.orEmpty().associateBy { it.name }
+        val chosen = selected.mapNotNull { byName[it] }
         if (chosen.isEmpty()) return
         val paths = chosen.filter { it.playable }.map { RemotePath.join(path, it.name) }
         viewModelScope.launch {

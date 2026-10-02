@@ -216,6 +216,8 @@
     <string name="action_add_to_playlist">加入播放列表</string>
     <string name="playlist_empty">播放列表是空的</string>
     <string name="playlist_empty_hint">浏览目录时长按选中视频，再点「加入播放列表」</string>
+    <!-- 每行右侧的拖拽把手，按住可上下拖动排序。 -->
+    <string name="playlist_reorder_handle">拖动排序</string>
     <string name="playlist_remove">移出播放列表</string>
     <string name="playlist_remove_title">从播放列表移除？</string>
     <string name="playlist_remove_body">将从「%1$s」的播放列表中移除 %2$d 项。影片本身不会被删除，仍在服务器上。</string>
