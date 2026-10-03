@@ -157,6 +157,13 @@ internal fun Tracks.toProbedMedia(durationMs: Long?): ProbedMedia {
     return ProbedMedia(containerMimeType = container, durationMs = durationMs, tracks = tracks)
 }
 
+/**
+ * The opt-in is for `Format.bitrate` alone — every other field read here is
+ * ordinary API. It sits on this function rather than on the file because that is
+ * where the one unstable field is read, which is also why the two callers above
+ * carry their own.
+ */
+@OptIn(UnstableApi::class)
 private fun Format.toTrackInfo(type: Int, supported: Boolean? = null) = TrackInfo(
     kind = when (type) {
         C.TRACK_TYPE_VIDEO -> TrackInfo.Kind.VIDEO

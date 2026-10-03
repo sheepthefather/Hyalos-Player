@@ -611,7 +611,13 @@ fun PlayerScreen(
  * `RESIZE_MODE_FILL` is the one that distorts, and `RESIZE_MODE_ZOOM` the one
  * that crops; both are deliberate choices in settings rather than something to
  * meet by accident.
+ *
+ * The opt-in is for `AspectRatioFrameLayout` itself, whose constants these are —
+ * it is one of the legacy views Media3 marks unstable and is steering callers
+ * away from. It is needed here, and not only on `PlayerScreen`, because this is
+ * a top-level function and inherits nothing from the composable that calls it.
  */
+@OptIn(UnstableApi::class)
 private fun VideoScale.toResizeMode(): Int = when (this) {
     VideoScale.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
     VideoScale.FILL -> AspectRatioFrameLayout.RESIZE_MODE_FILL
