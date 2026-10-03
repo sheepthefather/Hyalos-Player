@@ -565,13 +565,30 @@ fun PlayerScreen(
                     // part that says which episode this is — the end of the name,
                     // where the episode number usually sits.
                     overflow = TextOverflow.Clip,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        // Room for the buttons, equal on both sides so the title
-                        // is centred on the screen rather than in whatever space
-                        // the buttons happen to leave. Sized for the right, which
-                        // has two of them.
-                        .padding(horizontal = TOP_BAR_BUTTON_ROOM)
+                    // **Upright there is no room left to centre it in**, so it
+                    // goes against the arrow instead — see `TOP_BAR_BACK_ROOM`.
+                    // Landscape keeps the centred form: on a bar that wide, a
+                    // name in the middle reads as a title, where one huddled at
+                    // the left reads as text that happens to be there.
+                    modifier = (
+                        if (portrait) {
+                            Modifier
+                                .align(Alignment.CenterStart)
+                                .fillMaxWidth()
+                                .padding(
+                                    start = TOP_BAR_BACK_ROOM,
+                                    end = TOP_BAR_BUTTON_ROOM,
+                                )
+                        } else {
+                            Modifier
+                                .align(Alignment.Center)
+                                // Room for the buttons, equal on both sides so
+                                // the title is centred on the screen rather than
+                                // in whatever space the buttons happen to leave.
+                                // Sized for the right, which has three of them.
+                                .padding(horizontal = TOP_BAR_BUTTON_ROOM)
+                        }
+                        )
                         // Scrolls only when the name does not fit, so a short
                         // title is simply still.
                         .basicMarquee(),
@@ -637,12 +654,31 @@ private val TOP_SCRIM_HEIGHT = 120.dp
 private val TOP_BAR_HEIGHT = 56.dp
 
 /**
- * Clearance for the buttons either side of the title, so it never sits under
- * one. Three 48dp buttons plus the row's own padding, on the side that has
- * three: the padding is symmetric, so this is what keeps the title centred on
- * the screen rather than on the gap between unequal ends.
+ * Clearance for the row of buttons at the right-hand end of the title bar, so
+ * the title never sits under one. Three 48dp buttons plus the row's own
+ * padding, on the side that has three.
+ *
+ * In landscape it is used on **both** sides, which is what keeps the title
+ * centred on the screen rather than on the gap between unequal ends.
  */
 private val TOP_BAR_BUTTON_ROOM = 160.dp
+
+/**
+ * What the title has to clear at the left: the back button and its padding.
+ *
+ * **Only upright**, and only because the symmetric clearance above has nothing
+ * left to centre in there. A portrait screen is 360dp wide; 160dp of room on
+ * each side leaves the title 40dp, which is not a title — measured, and it
+ * showed `seek-` with the rest of the name scrolled past. The blank that leaves
+ * between the arrow and the title is 108dp, a third of the bar's width.
+ *
+ * So upright the title starts here instead and runs to the buttons. It is not
+ * centred any more, and could not be: what is left between the arrow and the
+ * three buttons is 148dp, and a name centred in that sits 54dp left of the
+ * screen's middle — off-centre enough to look like a mistake rather than a
+ * decision. Against the arrow is what a bar this narrow does anyway.
+ */
+private val TOP_BAR_BACK_ROOM = 56.dp
 
 /**
  * How often the remaining-time readout is rewritten.
