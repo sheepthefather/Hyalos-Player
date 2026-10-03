@@ -97,12 +97,58 @@ internal fun scrollIndexAt(progress: Float, thumb: ScrollThumb): Int =
     (progress.coerceIn(0f, 1f) * thumb.scrollableItems).roundToInt()
 
 /**
- * How far into the first visible item the viewport has already scrolled, 0..1.
+ * How many rows into the first visible one the viewport has scrolled.
  *
  * The offset is negative once a list has moved — the first item's top is above
- * the top of the window — which is why it is negated. A zero or negative size
- * means the item has not been measured yet, and the honest answer then is "not
- * yet scrolled into it".
+ * the top of the window — which is why it is negated.
+ *
+ * **[pitch], not the item's height, and deliberately not clamped at 1.** Both
+ * matter, and together they are the difference between a thumb that moves and
+ * one that stutters once per row:
+ *
+ * ```
+ * offset = row * pitch - scrolled      (the row's top, less what has scrolled)
+ * so   scrolled / pitch = row - offset / pitch
+ * ```
+ *
+ * — which is exactly `firstIndex + this`, continuous as long as the divisor is
+ * one row's *advance*. Measured on a grid: tiles 348 tall with a 48 gap, so a
+ * pitch of 396.
+ *
+ * The clamp is what breaks it, because **the layout does not promote the next
+ * row the moment the current one is fully above the window**. It keeps the
+ * leaving row as the first visible one for another stretch, and only then hands
+ * over. Over that stretch `-offset` exceeds the pitch — measured at 438 against
+ * 396 — so a clamped fraction sticks at 1, the position freezes, and it jumps
+ * when the row finally turns over. Letting it run past 1 keeps the sum exact:
+ * `0 + 438/396` and `1 + 42/396` are both `1.106`.
+ *
+ * The lower clamp stays: a first item whose top is below the window's start has
+ * not been scrolled into at all. A zero or negative pitch means the item has not
+ * been measured yet, and the honest answer then is "not yet scrolled into it".
  */
-internal fun firstItemProgress(offset: Int, size: Int): Float =
-    if (size <= 0) 0f else (-offset.toFloat() / size).coerceIn(0f, 1f)
+internal fun firstItemProgress(offset: Int, pitch: Int): Float =
+    if (pitch <= 0) 0f else (-offset.toFloat() / pitch).coerceAtLeast(0f)
+
+/**
+ * A row's advance: the tile plus the gap arranged under it.
+ *
+ * The layout does not hand this over — `LazyGridLayoutInfo` says nothing about
+ * the arrangement — but two tiles of the same column are exactly one pitch
+ * apart, and their offsets are right there to subtract. Falls back to the tile's
+ * own height when no second row is on screen to measure against, which is also
+ * the right answer for a list, where nothing arranged a gap.
+ */
+internal fun rowPitch(
+    columns: Int,
+    firstIndex: Int,
+    firstOffsetY: Int,
+    firstHeight: Int,
+    visibleOffsets: List<Pair<Int, Int>>,
+): Int {
+    if (columns <= 0) return firstHeight
+    val below = visibleOffsets.firstOrNull { it.first == firstIndex + columns }?.second
+        ?: return firstHeight
+    val pitch = below - firstOffsetY
+    return if (pitch > 0) pitch else firstHeight
+}

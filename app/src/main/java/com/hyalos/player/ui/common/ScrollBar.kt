@@ -100,7 +100,18 @@ fun ScrollBar(state: LazyGridState, modifier: Modifier = Modifier) {
         thumb = scrollThumb(
             total = rows,
             firstIndex = (first?.index ?: 0) / columns,
-            firstItemProgress = firstItemProgress(first?.offset?.y ?: 0, first?.size?.height ?: 0),
+            firstItemProgress = firstItemProgress(
+                first?.offset?.y ?: 0,
+                // The grid's rows are taller than its tiles: a pitch, not a
+                // height. See `firstItemProgress`.
+                rowPitch(
+                    columns = columns,
+                    firstIndex = first?.index ?: 0,
+                    firstOffsetY = first?.offset?.y ?: 0,
+                    firstHeight = first?.size?.height ?: 0,
+                    visibleOffsets = info.visibleItemsInfo.map { it.index to it.offset.y },
+                ),
+            ),
             visibleItems = visibleItemsIn(
                 viewportPx = info.viewportEndOffset - info.viewportStartOffset,
                 itemExtents = info.visibleItemsInfo.map { it.size.height },

@@ -106,25 +106,97 @@ class ScrollBarTest {
 
     @Test
     fun `an unscrolled list has not moved into its first item`() {
-        assertEquals(0f, firstItemProgress(offset = 0, size = 200), 0.0001f)
+        assertEquals(0f, firstItemProgress(offset = 0, pitch = 200), 0.0001f)
     }
 
     @Test
     fun `a list scrolled halfway into its first item reports half`() {
         // The offset is negative once a list has moved: the item's top is above
         // the top of the window.
-        assertEquals(0.5f, firstItemProgress(offset = -100, size = 200), 0.0001f)
+        assertEquals(0.5f, firstItemProgress(offset = -100, pitch = 200), 0.0001f)
     }
 
     @Test
     fun `an unmeasured item does not pretend to be scrolled`() {
-        assertEquals(0f, firstItemProgress(offset = -100, size = 0), 0.0001f)
+        assertEquals(0f, firstItemProgress(offset = -100, pitch = 0), 0.0001f)
     }
 
     @Test
-    fun `progress never exceeds the item`() {
-        assertEquals(1f, firstItemProgress(offset = -900, size = 200), 0.0001f)
-        assertEquals(0f, firstItemProgress(offset = 50, size = 200), 0.0001f)
+    fun `a first item below the window start is not scrolled into`() {
+        assertEquals(0f, firstItemProgress(offset = 50, pitch = 200), 0.0001f)
+    }
+
+    /**
+     * **Running past one is the point**, not a leak.
+     *
+     * The layout does not hand the next row over the moment the current one is
+     * clear of the window; it keeps the leaving row as the first visible one for
+     * another stretch. Over that stretch the offset is further above the window
+     * than one pitch, and clamping there is what freezes the thumb once per row.
+     *
+     * Measured on a grid of 348-tall tiles with a 48 gap: the row turns over when
+     * the leaving tile's offset reaches −438 against a pitch of 396, at which
+     * point the arriving tile sits at −42.
+     */
+    @Test
+    fun `progress runs past one while the row is still turning over`() {
+        assertEquals(1.106f, firstItemProgress(offset = -438, pitch = 396), 0.001f)
+        assertEquals(0.106f, firstItemProgress(offset = -42, pitch = 396), 0.001f)
+    }
+
+    /** And the two sides of the turn-over meet, which is what stops the jump. */
+    @Test
+    fun `the row either side of a turn-over gives the same place`() {
+        val before = 0 + firstItemProgress(offset = -438, pitch = 396)
+        val after = 1 + firstItemProgress(offset = -42, pitch = 396)
+
+        assertEquals(before, after, 0.001f)
+    }
+
+    // ------------------------------------------------------------------ pitch
+
+    @Test
+    fun `a row's pitch is measured from the row below it`() {
+        // Tiles 348 tall, the next row's top 396 further down: the pitch is 396,
+        // and the 48 between them is the arrangement's gap.
+        val pitch = rowPitch(
+            columns = 3,
+            firstIndex = 0,
+            firstOffsetY = -100,
+            firstHeight = 348,
+            visibleOffsets = listOf(0 to -100, 1 to -100, 2 to -100, 3 to 296),
+        )
+
+        assertEquals(396, pitch)
+    }
+
+    @Test
+    fun `with no second row on screen the pitch is the tile's height`() {
+        // Which is the answer for a list too: nothing arranged a gap under it.
+        val pitch = rowPitch(
+            columns = 3,
+            firstIndex = 0,
+            firstOffsetY = -100,
+            firstHeight = 348,
+            visibleOffsets = listOf(0 to -100, 1 to -100, 2 to -100),
+        )
+
+        assertEquals(348, pitch)
+    }
+
+    @Test
+    fun `a row above the first one is not mistaken for the next`() {
+        // Scrolled past the top, the first visible tile is not column 0, and the
+        // tile below it is still `columns` further along — not the one before it.
+        val pitch = rowPitch(
+            columns = 3,
+            firstIndex = 4,
+            firstOffsetY = -100,
+            firstHeight = 348,
+            visibleOffsets = listOf(1 to -496, 2 to -496, 4 to -100, 5 to -100, 7 to 296),
+        )
+
+        assertEquals(396, pitch)
     }
 
     // ---------------------------------------------------------------------
