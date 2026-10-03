@@ -24,6 +24,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.cutoutPath
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -56,6 +62,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
@@ -512,7 +519,19 @@ fun PlayerScreen(
                 Modifier
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
-                    .safeDrawingPadding()
+                    // Vertical always: that is the punch hole in portrait, and
+                    // the status bar when it is swiped back into view.
+                    // Horizontal only when the cutout is actually up here with
+                    // the bar — see `cutoutReachesTopBar`.
+                    .then(
+                        if (cutoutReachesTopBar()) {
+                            Modifier.safeDrawingPadding()
+                        } else {
+                            Modifier.windowInsetsPadding(
+                                WindowInsets.safeDrawing.only(WindowInsetsSides.Top),
+                            )
+                        },
+                    )
                     .height(TOP_BAR_HEIGHT),
             ) {
                 IconButton(
@@ -662,6 +681,39 @@ private val TOP_BAR_HEIGHT = 56.dp
  * centred on the screen rather than on the gap between unequal ends.
  */
 private val TOP_BAR_BUTTON_ROOM = 160.dp
+
+/**
+ * Whether the display cutout reaches up into the title bar's own strip of the
+ * screen — and so whether the bar has to keep clear of it at all.
+ *
+ * **The safe inset is a whole edge; the cutout is not.** `safeDrawingPadding()`
+ * reads the insets the system reports, and for a cutout those describe a
+ * rectangle covering the entire side. Measured in landscape on this device: the
+ * safe inset is `Rect(132, 0 - 0, 0)` — the full left edge, 44dp — while the
+ * hole is a 72.5px circle. The bar's strip is y 0..168 and the hole sits at
+ * y 504..576, so the bar was paying 44dp to keep clear of something 336px below
+ * it.
+ *
+ * A cutout at the top of the screen in portrait lands at the **middle of a side
+ * edge** in landscape, because rotating cannot move it off centre — which is
+ * why a bar along the top is never the thing in its way. [cutoutPath] is the
+ * actual shape rather than the edge-wide rectangle around it, so the question
+ * gets asked instead of assumed; a cutout that is off-centre in portrait is the
+ * case where assuming would have been wrong.
+ *
+ * Measured both ways, the path's bounds being the circle's own box:
+ * portrait `Rect(503.5, 29.5 - 576.0, 102.0)` → reaches the bar; landscape
+ * `Rect(29.5, 504.0 - 102.0, 576.5)` → does not.
+ */
+@Composable
+private fun cutoutReachesTopBar(): Boolean {
+    // Null when there is no cutout at all — an empty path and no path mean the
+    // same thing here.
+    val bounds = WindowInsets.cutoutPath?.getBounds() ?: return false
+    if (bounds.isEmpty) return false
+    val barBottom = with(LocalDensity.current) { TOP_BAR_HEIGHT.toPx() }
+    return bounds.top < barBottom
+}
 
 /**
  * What the title has to clear at the left: the back button and its padding.
