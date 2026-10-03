@@ -9,11 +9,17 @@ import kotlin.math.roundToInt
  * — and tested — without a screen. The composable turns these into pixels;
  * nothing here knows how tall anything is.
  *
- * Counts rather than pixel heights, which is an approximation: it assumes every
- * row is about as tall as every other. For this app's lists that is true by
- * construction — a row is one line of text beside a 36dp frame, a tile is a
- * 16:9 frame — and the alternative means summing the heights of every item,
- * most of which are nowhere near the screen.
+ * **The length comes from pixels, not from counting items**, and that is not a
+ * refinement — counting them is visibly wrong. The count of items intersecting
+ * a viewport is not the same number from one frame to the next: an item leaving
+ * the top takes it down by one, an item arriving at the bottom puts it back. A
+ * thumb whose length is that count divided by the total therefore pulses the
+ * whole way down a list — measured at 9/60 against 10/60 on a folder of sixty,
+ * alternating several times a second, which is 11% of its length.
+ *
+ * So what is passed in is how many items *would* fit, as a fraction: the
+ * viewport's height over the average item's. With rows of a height it is a
+ * constant, and the thumb holds still.
  */
 internal data class ScrollThumb(
     /** How much of the track the thumb covers, 0..1. */
@@ -36,16 +42,46 @@ internal fun scrollThumb(
     total: Int,
     firstIndex: Int,
     firstItemProgress: Float,
-    visibleCount: Int,
+    visibleItems: Float,
 ): ScrollThumb? {
-    val scrollableItems = total - visibleCount
-    if (total <= 0 || visibleCount <= 0 || scrollableItems <= 0) return null
-    val scrolled = (firstIndex + firstItemProgress).coerceIn(0f, scrollableItems.toFloat())
+    val scrollableItems = total - visibleItems
+    if (total <= 0 || visibleItems <= 0f || scrollableItems <= 0f) return null
+    val scrolled = (firstIndex + firstItemProgress).coerceIn(0f, scrollableItems)
     return ScrollThumb(
-        sizeFraction = (visibleCount.toFloat() / total).coerceIn(0f, 1f),
+        sizeFraction = (visibleItems / total).coerceIn(0f, 1f),
         progress = scrolled / scrollableItems,
-        scrollableItems = scrollableItems,
+        // Rounded because a drag lands on an index, and this is the far end of
+        // that mapping — see [scrollIndexAt].
+        scrollableItems = scrollableItems.roundToInt(),
     )
+}
+
+/**
+ * How many items fit on screen, as a fraction — from pixels, not by counting.
+ *
+ * [itemExtents] are the main-axis sizes of the items currently visible; their
+ * average is used as the size of a typical one. **The average is the point**:
+ * counting the visible items gives a number that alternates as items arrive and
+ * leave, while the average of their sizes does not — which is what stops the
+ * thumb pulsing (see the note on [ScrollThumb]).
+ *
+ * [itemsPerRow] is 1 for a list and the column count for a grid, where "how many
+ * items fit" is rows × columns. Getting it wrong in a grid would not jitter, it
+ * would simply make the thumb the wrong length by that factor.
+ *
+ * Falls back to the plain count when the average is unusable — before the first
+ * layout there are no sizes at all, and a count of zero there draws nothing,
+ * which is the right thing for a list that has not been measured yet.
+ */
+internal fun visibleItemsIn(
+    viewportPx: Int,
+    itemExtents: List<Int>,
+    itemsPerRow: Int,
+): Float {
+    if (itemExtents.isEmpty() || itemsPerRow <= 0) return 0f
+    val average = itemExtents.sum().toFloat() / itemExtents.size
+    if (average <= 0f) return itemExtents.size.toFloat()
+    return viewportPx.toFloat() / average * itemsPerRow
 }
 
 /**

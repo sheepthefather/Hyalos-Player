@@ -58,7 +58,11 @@ fun ScrollBar(state: LazyListState, modifier: Modifier = Modifier) {
             total = info.totalItemsCount,
             firstIndex = first?.index ?: 0,
             firstItemProgress = firstItemProgress(first?.offset ?: 0, first?.size ?: 0),
-            visibleCount = info.visibleItemsInfo.size,
+            visibleItems = visibleItemsIn(
+                viewportPx = info.viewportEndOffset - info.viewportStartOffset,
+                itemExtents = info.visibleItemsInfo.map { it.size },
+                itemsPerRow = 1,
+            ),
         ),
         scrolling = state.isScrollInProgress,
         onScrollTo = { index -> scope.launch { state.scrollToItem(index) } },
@@ -76,7 +80,17 @@ fun ScrollBar(state: LazyGridState, modifier: Modifier = Modifier) {
             total = info.totalItemsCount,
             firstIndex = first?.index ?: 0,
             firstItemProgress = firstItemProgress(first?.offset?.y ?: 0, first?.size?.height ?: 0),
-            visibleCount = info.visibleItemsInfo.size,
+            visibleItems = visibleItemsIn(
+                viewportPx = info.viewportEndOffset - info.viewportStartOffset,
+                itemExtents = info.visibleItemsInfo.map { it.size.height },
+                // A grid shows rows of them, so "how many fit" is rows times
+                // this. The tiles sharing the first visible tile's row are the
+                // column count — read off the layout rather than assumed,
+                // because `GridCells.Adaptive` decides it from the width.
+                itemsPerRow = first
+                    ?.let { f -> info.visibleItemsInfo.count { it.offset.y == f.offset.y } }
+                    ?: 1,
+            ),
         ),
         scrolling = state.isScrollInProgress,
         onScrollTo = { index -> scope.launch { state.scrollToItem(index) } },
