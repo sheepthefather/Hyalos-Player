@@ -460,6 +460,77 @@ class PlayerViewModel(
     }
 
     /**
+     * The seek the finger is choosing, while it is choosing it.
+     *
+     * Kept here for the same reason [level] is: the composition can be torn down
+     * under a running gesture, and a readout left behind by a composition nobody
+     * is looking at would sit on screen for good.
+     */
+    internal var seekPreview by mutableStateOf<SeekPreview?>(null)
+        private set
+
+    /** The countdown that clears [seekPreview] once the finger has been lifted. */
+    private var seekTimeout: Job? = null
+
+    /** Called on every move of the gesture. */
+    internal fun showSeek(preview: SeekPreview) {
+        seekTimeout?.cancel()
+        seekPreview = preview
+    }
+
+    /**
+     * Called when the finger lifts **and the seek is going to happen**. The
+     * readout stays a moment longer, because the jump has just been made and
+     * the two numbers are what says how far it went.
+     */
+    internal fun releaseSeek() {
+        seekTimeout?.cancel()
+        seekTimeout = viewModelScope.launch {
+            delay(LEVEL_LINGER_MS)
+            seekPreview = null
+        }
+    }
+
+    /**
+     * Called when the gesture ends **without** a seek — a release in a corner,
+     * or one that never moved.
+     *
+     * Gone at once rather than after the linger, which is the opposite of
+     * [releaseSeek] and deliberately so: the linger is there to let someone read
+     * a value that was just set, and a cancelled gesture sets nothing. Leaving
+     * the numbers up would say the film had moved when it had not.
+     */
+    internal fun clearSeek() {
+        seekTimeout?.cancel()
+        seekPreview = null
+    }
+
+    /**
+     * How long the film is, or null while the player does not know.
+     *
+     * `C.TIME_UNSET` is a large negative rather than zero, and both mean the
+     * same thing to a caller: there is no tenth of this to seek through.
+     */
+    internal val durationMs: Long?
+        get() = player.duration.takeIf { it != C.TIME_UNSET && it > 0L }
+
+    /** Where the film has got to, which is where a seek starts from. */
+    internal val positionMs: Long get() = player.currentPosition
+
+    /**
+     * Jump to [positionMs].
+     *
+     * The only seek the gesture makes, and made **once, on release** — not on
+     * every frame of the drag. Every seek on an SMB file makes the player
+     * re-open the stream and read from a new offset, so a drag that sought as it
+     * went would be a dozen round trips a second and a picture that stutters
+     * behind the finger.
+     */
+    internal fun seekTo(positionMs: Long) {
+        player.seekTo(positionMs)
+    }
+
+    /**
      * Pause, and lay out what the file and the player between them know.
      *
      * Paused on purpose, and **left** paused when it closes — the same rule as

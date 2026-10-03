@@ -250,6 +250,13 @@
     <string name="player_volume">音量</string>
     <!-- 提示里读出来的整句，供无障碍朗读；屏幕上显示的是「图标 + 进度条 + 数字」。 -->
     <string name="player_level_percent">%1$s %2$d%%</string>
+    <!-- 左右滑动快进/快退的预览。箭头的方向由这两个名字说出来，供无障碍朗读。 -->
+    <string name="player_seek_forward">快进</string>
+    <string name="player_seek_backward">快退</string>
+    <!-- 预览里的两个时间：现在在哪、松手会到哪。 -->
+    <string name="player_seek_times">%1$s → %2$s</string>
+    <!-- 手指停在四个角里时，替换掉上面那行时间：那里松手不算数。 -->
+    <string name="player_seek_cancelled">松手取消跳转</string>
 
     <!-- 关于 -->
     <string name="about_version">版本 %1$s</string>

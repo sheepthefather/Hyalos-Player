@@ -52,7 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -81,6 +81,7 @@ import androidx.media3.ui.R as Media3R
 import com.hyalos.player.R
 import com.hyalos.player.data.PlaybackOrientation
 import com.hyalos.player.data.VideoScale
+import com.hyalos.player.info.durationText
 import com.hyalos.player.playback.PlaybackErrors
 import com.hyalos.player.ui.common.InfoColors
 import com.hyalos.player.ui.common.InfoSectionList
@@ -259,12 +260,44 @@ fun PlayerScreen(
             // it anyway would be a binder call per frame for no change.
             var lastVolumeIndex = -1
 
-            detectVerticalDragGestures(
+            // Which way this gesture went, decided on its first movement and
+            // then held. Null until there has been one.
+            var axis: DragAxis? = null
+            // Whether it may seek at all, asked once on the way down.
+            var maySeek = false
+            var seekFrom = 0L
+            var seekTo = 0L
+            var travelledX = 0f
+            // Whether the finger is over a corner, kept as it goes past.
+            // `onDragEnd` is handed no position, so the release has to be judged
+            // by the last place the finger was *seen* — and keeping the answer
+            // rather than recomputing it is what stops the readout, which is
+            // told this every frame, from disagreeing with what the release does.
+            var cornered = false
+
+            // `detectDragGestures` rather than the vertical one, because this
+            // gesture now has a direction to decide as well as a value. **Two
+            // detectors cannot be stacked in one `pointerInput`** — each awaits
+            // its own slop and the first to arrive blocks the other — so there is
+            // one 2D detector and the arbitration is done here.
+            detectDragGestures(
                 onDragStart = { at ->
+                    travelled = 0f
+                    travelledX = 0f
+                    lastVolumeIndex = -1
+                    axis = null
+                    cornered = false
+                    // Both asked **once**, here, and held for the whole gesture:
+                    // a finger that drifts out of the seek zone, or across the
+                    // middle of the screen, must not hand the gesture to
+                    // something else half way through.
+                    //
+                    // `at` is where the drag was recognised rather than where the
+                    // finger landed — a touch slop's difference, and the closest
+                    // thing to the press that any drag detector reports.
+                    maySeek = seekZoneAt(at.x, size.width.toFloat())
                     val which = dragTargetAt(at.x, size.width.toFloat())
                     target = which
-                    travelled = 0f
-                    lastVolumeIndex = -1
                     from = when (which) {
                         DragTarget.BRIGHTNESS -> currentBrightness(activity?.window, context)
                         DragTarget.VOLUME -> audio?.let {
@@ -274,14 +307,48 @@ fun PlayerScreen(
                             )
                         } ?: 0f
                     }
-                    viewModel.showLevel(which, from)
+                    seekFrom = viewModel.positionMs
+                    seekTo = seekFrom
+                    // Nothing is shown yet: which readout it is depends on the
+                    // direction, and that arrives with the first move — in the
+                    // same frame, so nothing is lost by waiting for it.
                 },
-                onVerticalDrag = { change, amount ->
+                onDrag = { change, amount ->
                     // Claimed, so the drag does not also reach the player behind
                     // and fire a tap once the finger lifts.
                     change.consume()
-                    val which = target ?: return@detectVerticalDragGestures
-                    travelled += amount
+                    val way = axis ?: axisOf(amount.x, amount.y).also { axis = it }
+
+                    if (way == DragAxis.HORIZONTAL) {
+                        // The outer fifths, and a film of unknown length, simply
+                        // do not seek. The gesture is still swallowed, so it
+                        // cannot land as a tap on the controls behind.
+                        if (!maySeek) return@detectDragGestures
+                        val duration = viewModel.durationMs ?: return@detectDragGestures
+                        travelledX += amount.x
+                        seekTo = seekTargetAfter(
+                            startMs = seekFrom,
+                            dragPx = travelledX,
+                            widthPx = size.width.toFloat(),
+                            durationMs = duration,
+                        )
+                        // Where the finger is **now**, as against where it will
+                        // be let go. The readout is the only thing that can warn
+                        // someone that drifting into a corner is about to throw
+                        // the seek away, and warning them at the end would be
+                        // warning them too late to come back out.
+                        cornered = inCorner(
+                            x = change.position.x,
+                            y = change.position.y,
+                            width = size.width.toFloat(),
+                            height = size.height.toFloat(),
+                        )
+                        viewModel.showSeek(SeekPreview(seekFrom, seekTo, cancelled = cornered))
+                        return@detectDragGestures
+                    }
+
+                    val which = target ?: return@detectDragGestures
+                    travelled += amount.y
                     when (which) {
                         DragTarget.BRIGHTNESS -> {
                             val level = brightnessAfter(from, travelled, size.height.toFloat())
@@ -312,12 +379,44 @@ fun PlayerScreen(
                     }
                 },
                 onDragEnd = {
-                    target = null
-                    viewModel.releaseLevel()
+                    if (axis == DragAxis.HORIZONTAL) {
+                        // **Where the finger stopped is what counts**, and that
+                        // is [cornered] — the answer the last move already worked
+                        // out, for the last place the finger was seen. Asking
+                        // again here would be asking the same question twice, and
+                        // leaving the readout free to disagree with the release.
+                        //
+                        // The corners are where the control bar's own buttons
+                        // are, so a finger that ends there was more likely
+                        // reaching for one of them than choosing a minute.
+                        //
+                        // A target equal to where the film already is is not
+                        // sent: on a file over the network a seek re-opens the
+                        // stream, and paying that for no movement is worse than
+                        // the round trip it saves.
+                        val kept = maySeek && !cornered && seekTo != seekFrom
+                        if (kept) {
+                            viewModel.seekTo(seekTo)
+                            viewModel.releaseSeek()
+                        } else {
+                            viewModel.clearSeek()
+                        }
+                    } else {
+                        viewModel.releaseLevel()
+                    }
                 },
                 onDragCancel = {
-                    target = null
-                    viewModel.releaseLevel()
+                    // A cancelled gesture keeps nothing, seek included: whatever
+                    // took the pointer away — the control bar's own progress bar
+                    // claiming a move, a system edge swipe arriving, a second
+                    // screen opening — did not mean to move the film. Unlike the
+                    // readouts for brightness and volume, which *were* changing
+                    // as the finger went, this one has nothing to linger over.
+                    if (axis == DragAxis.HORIZONTAL) {
+                        viewModel.clearSeek()
+                    } else {
+                        viewModel.releaseLevel()
+                    }
                 },
             )
         },
@@ -495,6 +594,11 @@ fun PlayerScreen(
         // After the bars, so the readout sits over them; before the info sheet,
         // which is a thing the user opened and should stay on top.
         PlayerLevelOverlay(viewModel)
+
+        // The two readouts cannot both be up: the direction decides which one a
+        // gesture gets, and it is decided once. They share the middle of the
+        // screen for that reason.
+        PlayerSeekOverlay(viewModel)
 
         PlayerInfoOverlay(viewModel)
     }
@@ -741,6 +845,91 @@ private fun PlayerLevelOverlay(viewModel: PlayerViewModel) {
             // this is" reads the same way in both places.
             LinearProgressIndicator(
                 progress = { feedback.fraction },
+                color = Color.White,
+                trackColor = Color.White.copy(alpha = 0.3f),
+                modifier = Modifier.width(PLAYER_LEVEL_BAR_WIDTH),
+            )
+        }
+    }
+}
+
+/**
+ * Where a sideways drag would land, while the finger is choosing it.
+ *
+ * Both ends of the jump, not just the target: a seek is a *move*, and the whole
+ * of what is being chosen is how far. The bar underneath repeats it against the
+ * film as a whole, so "that is most of the way in" is legible without reading
+ * either number.
+ *
+ * The time is `durationText` — the same formatter the info dialog uses, and the
+ * only one that gives an unsigned time. The control bar's own countdown carries
+ * a minus sign and would read as going backwards.
+ */
+@Composable
+private fun PlayerSeekOverlay(viewModel: PlayerViewModel) {
+    // Read here rather than passed in, so that a drag recomposes this and not
+    // the whole screen. See `PlayerLevelOverlay`.
+    val preview = viewModel.seekPreview ?: return
+    // Only ever null if the film stopped knowing its own length mid-gesture,
+    // which cannot happen — but a fraction needs a denominator.
+    val duration = viewModel.durationMs ?: return
+
+    val forward = preview.toMs > preview.fromMs
+    val label = stringResource(
+        if (forward) R.string.player_seek_forward else R.string.player_seek_backward,
+    )
+    // The panel says one thing and it is whichever of the two is true at this
+    // instant: the jump that letting go would make, or that letting go where the
+    // finger is will make none. The arrow and the bar stay as they are either
+    // way — they are the jump being offered, and being told it is about to be
+    // thrown away is only useful beside what is being thrown away.
+    val times = if (preview.cancelled) {
+        stringResource(R.string.player_seek_cancelled)
+    } else {
+        stringResource(
+            R.string.player_seek_times,
+            durationText(preview.fromMs),
+            durationText(preview.toMs),
+        )
+    }
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .clip(RoundedCornerShape(16.dp))
+                .background(PLAYER_INFO_PANEL)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                // One announcement for the whole panel: the arrow, the numbers
+                // and the bar are the same fact three times over, and the arrow
+                // on its own says nothing out loud. The cancelled line is
+                // already a sentence, so it is not prefixed with the direction —
+                // "快进 松手取消跳转" would announce a direction for a jump that
+                // is not going to happen.
+                .semantics(mergeDescendants = true) {
+                    contentDescription =
+                        if (preview.cancelled) times else "$label $times"
+                },
+        ) {
+            Icon(
+                painter = painterResource(
+                    if (forward) R.drawable.ic_forward else R.drawable.ic_rewind,
+                ),
+                contentDescription = null,
+                tint = Color.White,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = times,
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+            )
+            Spacer(Modifier.height(8.dp))
+            // The same bar, and the same width, as the brightness and volume
+            // readout: this is the third thing a drag on the picture can do, and
+            // it should not look like a different feature.
+            LinearProgressIndicator(
+                progress = { (preview.toMs.toFloat() / duration).coerceIn(0f, 1f) },
                 color = Color.White,
                 trackColor = Color.White.copy(alpha = 0.3f),
                 modifier = Modifier.width(PLAYER_LEVEL_BAR_WIDTH),

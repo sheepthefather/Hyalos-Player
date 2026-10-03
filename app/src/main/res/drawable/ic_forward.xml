@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Material Symbols Outlined "fast_forward", Apache-2.0.
+  Source: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/fast_forward/materialsymbolsoutlined/fast_forward_24px.svg
+
+  Path data is byte-for-byte the upstream `d` attribute. The source viewBox is
+  already "0 -960 960 960" — the same 960 grid this drawable uses — so there is
+  no rescaling here (nothing x24, x40 or otherwise): the glyph is moved into the
+  viewport with a single translateY, exactly as `ic_brightness.xml` does.
+
+  The glyph is two right-pointing triangles in a row — the conventional
+  "skip ahead" mark. It is the mirror of `ic_rewind.xml`, which is Material's
+  `fast_rewind` on the same grid.
+
+  Filled #FFFFFFFF — but honestly: hard-coded white is NOT load-bearing here.
+  The current call site is Compose's `Icon`, which passes a `tint`, and Compose
+  recolours the vector with it, so this white is overridden and the icon takes
+  the tint's colour instead. White is kept only for consistency with its
+  neighbours (`ic_drag_handle.xml`, `ic_brightness.xml`) and so that the drawing
+  would not turn black if it were ever moved into a Media3 controller button,
+  which sets no `android:tint` and paints untinted icons as-is on a dark scrim.
+
+  Shown in the preview overlay that appears while the finger drags HORIZONTALLY
+  across the video: dragging right seeks forward, and this arrow sits beside the
+  "current -> target" time readout to say which direction the scrub is going.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- The source viewBox starts at y = -960; shift it into the viewport. -->
+    <group android:translateY="960">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M100-240v-480l360 240-360 240Zm400 0v-480l360 240-360 240ZM180-480Zm400 0Zm-400 90 136-90-136-90v180Zm400 0 136-90-136-90v180Z" />
+    </group>
+</vector>
