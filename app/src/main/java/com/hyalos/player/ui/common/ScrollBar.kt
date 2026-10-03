@@ -75,25 +75,41 @@ fun ScrollBar(state: LazyGridState, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val info = state.layoutInfo
     val first = info.visibleItemsInfo.firstOrNull()
+
+    // The tiles sharing the first visible tile's row are the column count, read
+    // off the layout rather than assumed: `GridCells.Adaptive` decides it from
+    // the width, and it differs between a phone and a tablet.
+    val columns = (first
+        ?.let { f -> info.visibleItemsInfo.count { it.offset.y == f.offset.y } }
+        ?: 1).coerceAtLeast(1)
+
+    // **Everything below is counted in rows, not tiles**, and that is the whole
+    // of this overload's job. The vertical axis is made of rows, so a tile index
+    // is not a distance along it: scrolling one row moves the first visible tile
+    // by `columns`, while `firstItemProgress` — measured against one tile —
+    // climbs by one. Added together they advance by `columns - 1` for every
+    // `columns` of movement, so the thumb crawls through each row and then leaps
+    // at the boundary. Measured on a three-column grid: a smooth +1 followed by
+    // a jump of +2, per row, all the way down.
+    //
+    // In rows it is continuous: within a row the fraction climbs 0 to 1, and at
+    // the boundary the row index goes up by one as the fraction falls back to
+    // zero.
+    val rows = (info.totalItemsCount + columns - 1) / columns
     ScrollBar(
         thumb = scrollThumb(
-            total = info.totalItemsCount,
-            firstIndex = first?.index ?: 0,
+            total = rows,
+            firstIndex = (first?.index ?: 0) / columns,
             firstItemProgress = firstItemProgress(first?.offset?.y ?: 0, first?.size?.height ?: 0),
             visibleItems = visibleItemsIn(
                 viewportPx = info.viewportEndOffset - info.viewportStartOffset,
                 itemExtents = info.visibleItemsInfo.map { it.size.height },
-                // A grid shows rows of them, so "how many fit" is rows times
-                // this. The tiles sharing the first visible tile's row are the
-                // column count — read off the layout rather than assumed,
-                // because `GridCells.Adaptive` decides it from the width.
-                itemsPerRow = first
-                    ?.let { f -> info.visibleItemsInfo.count { it.offset.y == f.offset.y } }
-                    ?: 1,
-            ),
+                itemsPerRow = columns,
+            ) / columns,
         ),
         scrolling = state.isScrollInProgress,
-        onScrollTo = { index -> scope.launch { state.scrollToItem(index) } },
+        // Back to tiles for the list itself, which only counts in them.
+        onScrollTo = { row -> scope.launch { state.scrollToItem(row * columns) } },
         modifier = modifier,
     )
 }
