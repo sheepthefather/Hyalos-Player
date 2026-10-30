@@ -33,6 +33,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -152,6 +156,18 @@ class EditorViewModel(
 
     /** The file's name, as the title and the cache entry use it. */
     val name: String get() = RemotePath.name(path)
+
+    /**
+     * Whether long lines wrap. A stored preference, shared with every other
+     * file this editor opens — see `AppSettings.editorWrap`.
+     */
+    val wrap: StateFlow<Boolean> = container.settings.settings
+        .map { it.editorWrap }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun toggleWrap() {
+        viewModelScope.launch { container.settings.setEditorWrap(!wrap.value) }
+    }
 
     /**
      * Whether opening this file in another app means downloading it first.

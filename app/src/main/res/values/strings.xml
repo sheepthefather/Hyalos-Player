@@ -232,6 +232,8 @@
     <string name="editor_discard_body">「%1$s」有还没保存的修改，返回后就没有了。</string>
     <string name="editor_discard">放弃</string>
     <string name="editor_close_menu">更多</string>
+    <!-- 开关：长行是否折行显示。关掉后长行不折行，改为左右滚动。 -->
+    <string name="editor_wrap">自动换行</string>
     <!-- 保存失败：原文件一动没动。 -->
     <string name="editor_save_failed_title">保存失败</string>
     <string name="editor_save_untouched">原文件没有被改动。</string>

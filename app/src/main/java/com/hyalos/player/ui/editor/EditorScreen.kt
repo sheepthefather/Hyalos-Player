@@ -2,6 +2,7 @@ package com.hyalos.player.ui.editor
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,11 +51,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
 import com.hyalos.player.files.SaveStage
 import com.hyalos.player.files.openWith
@@ -84,6 +87,7 @@ fun EditorScreen(viewModel: EditorViewModel, onBack: () -> Unit) {
     var askingDiscard by remember { mutableStateOf(false) }
     var askingLarge by remember { mutableStateOf(false) }
     val state = viewModel.state
+    val wrap by viewModel.wrap.collectAsStateWithLifecycle()
 
     // Back means "leave" only when there is nothing to lose. With unsaved
     // changes it means "ask", and the answer decides.
@@ -156,7 +160,12 @@ fun EditorScreen(viewModel: EditorViewModel, onBack: () -> Unit) {
                                 state is State.Ready,
                         ) { Text(stringResource(R.string.save)) }
                     }
-                    OpenWithMenu(viewModel, onLarge = { askingLarge = true })
+                    OpenWithMenu(
+                        viewModel = viewModel,
+                        wrap = wrap,
+                        onToggleWrap = viewModel::toggleWrap,
+                        onLarge = { askingLarge = true },
+                    )
                 },
             )
         },
@@ -187,7 +196,7 @@ fun EditorScreen(viewModel: EditorViewModel, onBack: () -> Unit) {
                         if (viewModel.largeDownload) askingLarge = true else viewModel.openExternally()
                     }) { Text(stringResource(R.string.open_with)) }
                 }
-                is State.Ready -> Field(viewModel)
+                is State.Ready -> Field(viewModel, wrap = wrap)
             }
         }
     }
@@ -217,15 +226,20 @@ fun EditorScreen(viewModel: EditorViewModel, onBack: () -> Unit) {
  * something a text field can afford.
  */
 @Composable
-private fun Field(viewModel: EditorViewModel) {
+private fun Field(viewModel: EditorViewModel, wrap: Boolean) {
     val style = MaterialTheme.typography.bodyMedium.copy(
         fontFamily = FontFamily.Monospace,
         color = MaterialTheme.colorScheme.onSurface,
     )
     val density = LocalDensity.current
     val scroll = rememberScrollState()
+    val across = rememberScrollState()
     val measurer = rememberTextMeasurer()
-    val numberColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // Numbers are metadata about the text, not text: at full `onSurfaceVariant`
+    // they read as another column of the file. Half-tone, and a rule between
+    // them and the text, is what makes the boundary visible at a glance.
+    val numberColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    val ruleColor = MaterialTheme.colorScheme.outlineVariant
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     var viewport by remember { mutableFloatStateOf(0f) }
 
@@ -236,6 +250,8 @@ private fun Field(viewModel: EditorViewModel) {
     val gap = with(density) { GUTTER_GAP.toPx() }
     val gutter = numberWidth + gap
     val textHeightPx = layout?.size?.height ?: 0
+    // At least the viewport, so the rule reaches the bottom even in a short file.
+    val gutterHeightPx = maxOf(textHeightPx, viewport.toInt())
 
     Box(Modifier.fillMaxSize().onSizeChanged { viewport = it.height.toFloat() }) {
         Row(
@@ -247,7 +263,7 @@ private fun Field(viewModel: EditorViewModel) {
             Canvas(
                 Modifier
                     .width(with(density) { gutter.toDp() })
-                    .height(with(density) { textHeightPx.toDp() }),
+                    .height(with(density) { gutterHeightPx.toDp() }),
             ) {
                 // One viewport either side of the visible band: generous enough
                 // that a fast fling never shows a gap, cheap enough that the
@@ -265,18 +281,51 @@ private fun Field(viewModel: EditorViewModel) {
                         style = numberStyle,
                     )
                 }
+                // Deliberately not at the edge of the gutter: a rule flush
+                // against the text reads as an underline for the first
+                // character. A few dp back gives the text room to breathe
+                // without splitting the gap evenly, which would make the line
+                // look like it belongs to neither side.
+                val x = size.width - RULE_TO_TEXT.toPx()
+                drawLine(ruleColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
             }
-            BasicTextField(
-                value = viewModel.text,
-                onValueChange = viewModel::edit,
-                readOnly = viewModel.readOnly,
-                textStyle = style,
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                onTextLayout = { layout = it },
-                modifier = Modifier.weight(1f),
-            )
+            if (wrap) {
+                // Bounded width: the field wraps at the edge of the screen.
+                EditorField(viewModel, style, Modifier.weight(1f)) { layout = it }
+            } else {
+                // Unbounded width inside its own horizontal scroll: a paragraph
+                // is one line, and the long ones are reached by scrolling sideways
+                // rather than being folded into a shape the author never wrote.
+                Row(Modifier.weight(1f).horizontalScroll(across)) {
+                    EditorField(viewModel, style, Modifier) { layout = it }
+                }
+            }
         }
     }
+}
+
+/**
+ * The field itself, with whatever width its caller decided on.
+ *
+ * Named apart from the screen-level composables because there are two call
+ * sites for the same field and only their constraints differ.
+ */
+@Composable
+private fun EditorField(
+    viewModel: EditorViewModel,
+    style: TextStyle,
+    modifier: Modifier,
+    onLayout: (TextLayoutResult) -> Unit,
+) {
+    BasicTextField(
+        value = viewModel.text,
+        onValueChange = viewModel::edit,
+        readOnly = viewModel.readOnly,
+        textStyle = style,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        onTextLayout = onLayout,
+        modifier = modifier,
+    )
 }
 
 /** Where each numbered row starts, and what its number says. */
@@ -293,6 +342,15 @@ private fun TextLayoutResult.numberMarks(text: String): List<Pair<Float, String>
 
 /** Between a number and the text it numbers. */
 private val GUTTER_GAP = 12.dp
+
+/**
+ * How far the rule stands back from the text.
+ *
+ * Small: the gutter has 12dp of gap and this takes a third of it, so the rule
+ * sits nearer the numbers than the text — a divider hugging the text reads as
+ * part of it.
+ */
+private val RULE_TO_TEXT = 4.dp
 
 /** The encoding, and whether the file on screen still matches the file on the server. */
 @Composable
@@ -314,20 +372,35 @@ private fun Subtitle(state: State, dirty: Boolean, saving: Boolean, readOnly: Bo
 }
 
 /**
- * Hands what is on screen to another app.
+ * The overflow menu: how the text is laid out, and the way out to another app.
  *
- * The action is kept in the overflow rather than beside Save: it is the rarer
- * of the two by a wide margin, and a working editor's second button should not
- * be "give up and let somebody else read this".
+ * Wrapping sits here rather than in Settings because it is a decision made
+ * while looking at a file — but it is stored, so it is the same decision the
+ * next file inherits.
  */
 @Composable
-private fun OpenWithMenu(viewModel: EditorViewModel, onLarge: () -> Unit) {
+private fun OpenWithMenu(
+    viewModel: EditorViewModel,
+    wrap: Boolean,
+    onToggleWrap: () -> Unit,
+    onLarge: () -> Unit,
+) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(painterResource(R.drawable.ic_more_vert), stringResource(R.string.editor_close_menu))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.editor_wrap)) },
+                trailingIcon = {
+                    if (wrap) Icon(painterResource(R.drawable.ic_check), null, Modifier.size(20.dp))
+                },
+                onClick = {
+                    open = false
+                    onToggleWrap()
+                },
+            )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.open_with)) },
                 onClick = {

@@ -28,6 +28,10 @@ class SettingsRepository(private val store: DataStore<AppSettings>) {
         store.updateData { it.copy(sortAscending = ascending) }
     }
 
+    suspend fun setEditorWrap(wrap: Boolean) {
+        store.updateData { it.copy(editorWrap = wrap) }
+    }
+
     suspend fun setPlaybackMode(mode: PlaybackMode) {
         store.updateData { it.copy(playbackMode = mode) }
     }

@@ -58,6 +58,18 @@ data class AppSettings(
      * on the controller is tapped.
      */
     val initialOrientation: PlaybackOrientation = PlaybackOrientation.LANDSCAPE,
+
+    /**
+     * Whether the text editor wraps long lines.
+     *
+     * On by default, because most text is prose and a phone is narrow. Off is
+     * the mode for reading code: a wrapped line hides the shape of an
+     * indentation, and the field is then scrolled sideways instead.
+     *
+     * Remembered like the browser's layout — a way of looking at files, not a
+     * property of any one of them.
+     */
+    val editorWrap: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_THUMBNAIL_CACHE_MB = 100
