@@ -97,6 +97,29 @@ internal fun scrollIndexAt(progress: Float, thumb: ScrollThumb): Int =
     (progress.coerceIn(0f, 1f) * thumb.scrollableItems).roundToInt()
 
 /**
+ * The thumb for a plain scroll container, which counts in pixels and nothing else.
+ *
+ * The same three numbers, read from a different place: a `ScrollState` knows how
+ * far it has gone ([value]) and how much further it can go ([maxValue]), so the
+ * whole content is the viewport plus that range, and the thumb is the viewport's
+ * share of it.
+ *
+ * Null when there is nothing to say — no range to travel, or no viewport measured
+ * yet. **A full-length thumb on a full-length track is a scrollbar with nowhere
+ * to go**, and drawing one only invites a grab that does nothing.
+ */
+internal fun scrollThumb(value: Int, maxValue: Int, viewportPx: Float): ScrollThumb? {
+    if (maxValue <= 0 || viewportPx <= 0f) return null
+    return ScrollThumb(
+        sizeFraction = (viewportPx / (viewportPx + maxValue)).coerceIn(0f, 1f),
+        progress = (value.toFloat() / maxValue).coerceIn(0f, 1f),
+        // Unused here: this scroll is dragged to a fraction of its range, not to
+        // an index. Carried so the two cases share [ScrollThumb].
+        scrollableItems = maxValue,
+    )
+}
+
+/**
  * How many rows into the first visible one the viewport has scrolled.
  *
  * The offset is negative once a list has moved — the first item's top is above

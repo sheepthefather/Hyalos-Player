@@ -2,6 +2,7 @@ package com.hyalos.player.ui.common
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * A scrollbar for a lazy list: a thin thumb down the right edge that follows the
@@ -65,7 +67,9 @@ fun ScrollBar(state: LazyListState, modifier: Modifier = Modifier) {
             ),
         ),
         scrolling = state.isScrollInProgress,
-        onScrollTo = { index -> scope.launch { state.scrollToItem(index) } },
+        onScrollTo = { progress, thumb ->
+            scope.launch { state.scrollToItem(scrollIndexAt(progress, thumb)) }
+        },
         modifier = modifier,
     )
 }
@@ -120,9 +124,40 @@ fun ScrollBar(state: LazyGridState, modifier: Modifier = Modifier) {
         ),
         scrolling = state.isScrollInProgress,
         // Back to tiles for the list itself, which only counts in them.
-        onScrollTo = { row -> scope.launch { state.scrollToItem(row * columns) } },
+        onScrollTo = { progress, thumb ->
+            scope.launch { state.scrollToItem(scrollIndexAt(progress, thumb) * columns) }
+        },
         modifier = modifier,
     )
+}
+
+/**
+ * A scrollbar for a plain scroll container — the text editor, which scrolls in
+ * pixels and has no items to count.
+ *
+ * The track's own height is the viewport: the bar is laid out over the same box
+ * the text scrolls in, so `constraints.maxHeight` is how much text is on screen
+ * and the thumb is that share of the whole. The drag maps a fraction of the
+ * range straight back to pixels, which is exact where an index would have to be
+ * rounded.
+ */
+@Composable
+fun ScrollBar(state: ScrollState, modifier: Modifier = Modifier) {
+    val scope = rememberCoroutineScope()
+    BoxWithConstraints(modifier.fillMaxHeight().width(SCROLLBAR_TOUCH_WIDTH)) {
+        ScrollBar(
+            thumb = scrollThumb(
+                value = state.value,
+                maxValue = state.maxValue,
+                viewportPx = constraints.maxHeight.toFloat(),
+            ),
+            scrolling = state.isScrollInProgress,
+            onScrollTo = { progress, _ ->
+                val target = (progress * state.maxValue).roundToInt()
+                scope.launch { state.scrollTo(target) }
+            },
+        )
+    }
 }
 
 /** How long the bar stays after the last movement, then how long it takes to go. */
@@ -146,7 +181,8 @@ private val SCROLLBAR_MIN_THUMB = 32.dp
 private fun ScrollBar(
     thumb: ScrollThumb?,
     scrolling: Boolean,
-    onScrollTo: (Int) -> Unit,
+    /** Where to go for a drag ending [progress] of the way along the travel. */
+    onScrollTo: (progress: Float, thumb: ScrollThumb) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Held separately from `scrolling`: a drag that pauses — a finger resting on
@@ -218,10 +254,8 @@ private fun ScrollBar(
                                     draggedPx += amount.y
                                     fromPx = (startPx + draggedPx).coerceIn(0f, travel)
                                     onScrollTo(
-                                        scrollIndexAt(
-                                            if (travel > 0f) fromPx / travel else 0f,
-                                            live.value,
-                                        ),
+                                        if (travel > 0f) fromPx / travel else 0f,
+                                        live.value,
                                     )
                                 },
                             )

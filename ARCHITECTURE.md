@@ -509,6 +509,8 @@ val chosen = selected.mapNotNull { byName[it] }   // 点选顺序
 
 **界面上的几条克制：**不自动聚焦（打开来只是读的话不该弹键盘）；`imePadding()` 放在 **Scaffold** 上而不是输入框所在的内容上——放内容上时「已保存」的 snackbar 被键盘挡在外面，实测点了保存像是没有反应；返回时若有未保存修改弹「放弃修改？」，键盘打开的那一次返回先由系统收走。
 
+**滚动条复用浏览器列表那一个**（`ui/common/ScrollBar`），只多了一个 `ScrollState` 重载：普通滚动只有「位置」和「范围」两个像素数，没有「第几项」，所以拖动直接换算成像素；列表那条要按项数取整，因为 `scrollToItem` 只认索引。淡入淡出、触摸宽度（28dp 触摸 / 4dp 绘制）和「停止 900ms 后消失」都是同一份代码，长文件不会永久压住最后一列字符。
+
 **进程被杀会丢掉未保存的文字。** 路由能恢复（`rememberNavBackStack` 序列化 key），但经 ViewModel 作用域的文字不在 key 里，也不该在——1 MiB 的文字放进 `SavedStateHandle` 会在 `TransactionTooLarge` 上炸掉。这条是接受的损失，不假装处理了。
 
 ### 播放器里的「视频信息」

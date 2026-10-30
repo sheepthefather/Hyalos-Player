@@ -247,4 +247,33 @@ class ScrollBarTest {
         // A guard against dividing by the average, which would be zero.
         assertEquals(4f, visibleItemsIn(900, List(4) { 0 }, itemsPerRow = 1), 0.0001f)
     }
+
+    // ------------------------------------------------------- pixel scrolling
+    // The editor's text has no items to count: its scroll knows only a position
+    // and a range, both in pixels.
+
+    @Test
+    fun `text that fits on screen has no thumb`() {
+        assertNull(scrollThumb(value = 0, maxValue = 0, viewportPx = 1200f))
+    }
+
+    @Test
+    fun `nothing measured yet has no thumb`() {
+        assertNull(scrollThumb(value = 0, maxValue = 400, viewportPx = 0f))
+    }
+
+    @Test
+    fun `the thumb covers the visible share of the text`() {
+        // 500 of the 2000 pixels are on screen: a quarter of the track.
+        val thumb = scrollThumb(value = 0, maxValue = 1500, viewportPx = 500f)
+        assertEquals(0.25f, thumb!!.sizeFraction, 0.0001f)
+    }
+
+    @Test
+    fun `the thumb follows the position in the range`() {
+        val half = scrollThumb(value = 750, maxValue = 1500, viewportPx = 500f)
+        assertEquals(0.5f, half!!.progress, 0.0001f)
+        val top = scrollThumb(value = 0, maxValue = 1500, viewportPx = 500f)
+        assertEquals(0f, top!!.progress, 0.0001f)
+    }
 }
