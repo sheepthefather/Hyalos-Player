@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,6 +58,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
@@ -71,6 +74,7 @@ import com.hyalos.player.ui.editor.EditorViewModel.Refusal
 import com.hyalos.player.ui.editor.EditorViewModel.SaveFailure
 import com.hyalos.player.ui.editor.EditorViewModel.State
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * The text editor: one file, its bytes kept as they were, and a field to change
@@ -261,20 +265,26 @@ private fun Field(viewModel: EditorViewModel, wrap: Boolean) {
     val gap = with(density) { GUTTER_GAP.toPx() }
     val gutter = numberWidth + gap
     val textHeightPx = layout?.size?.height ?: 0
-    // At least the viewport, so the rule reaches the bottom even in a short file.
-    val gutterHeightPx = maxOf(textHeightPx, viewport.toInt())
+    val ruleX = with(density) { TEXT_PADDING_H.toPx() } + gutter - with(density) { RULE_TO_TEXT.toPx() }
 
     Box(Modifier.fillMaxSize().onSizeChanged { viewport = it.height.toFloat() }) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(
+                    start = TEXT_PADDING_H,
+                    end = TEXT_PADDING_H,
+                    top = TEXT_PADDING_TOP,
+                    bottom = TEXT_PADDING_BOTTOM,
+                )
                 .verticalScroll(scroll),
         ) {
             Canvas(
                 Modifier
                     .width(with(density) { gutter.toDp() })
-                    .height(with(density) { gutterHeightPx.toDp() }),
+                    // Exactly as tall as the text, and no taller: see the rule
+                    // drawn outside this Row.
+                    .height(with(density) { textHeightPx.toDp() }),
             ) {
                 // One viewport either side of the visible band: generous enough
                 // that a fast fling never shows a gap, cheap enough that the
@@ -292,13 +302,6 @@ private fun Field(viewModel: EditorViewModel, wrap: Boolean) {
                         style = numberStyle,
                     )
                 }
-                // Deliberately not at the edge of the gutter: a rule flush
-                // against the text reads as an underline for the first
-                // character. A few dp back gives the text room to breathe
-                // without splitting the gap evenly, which would make the line
-                // look like it belongs to neither side.
-                val x = size.width - RULE_TO_TEXT.toPx()
-                drawLine(ruleColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
             }
             if (wrap) {
                 // Bounded width: the field wraps at the edge of the screen.
@@ -310,6 +313,26 @@ private fun Field(viewModel: EditorViewModel, wrap: Boolean) {
                 Row(Modifier.weight(1f).horizontalScroll(across)) {
                     EditorField(viewModel, style, Modifier) { layout = it }
                 }
+            }
+        }
+        // The rule, drawn **outside** the scrolling content.
+        //
+        // Inside it, the rule had to be at least a screen tall to reach the
+        // bottom of a short file — and a scrolling child taller than the scroll
+        // viewport (which is 24dp shorter, by the padding above) is a scroll
+        // range. A one-line file therefore had a scrollbar, and could be nudged
+        // up and down by a hair. Here it costs the content nothing and still
+        // runs the full height.
+        if (layout != null) {
+            Canvas(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .offset { IntOffset(ruleX.roundToInt(), 0) }
+                    .width(1.dp)
+                    .fillMaxHeight(),
+            ) {
+                val x = size.width / 2f
+                drawLine(ruleColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.dp.toPx())
             }
         }
         // The same bar the browser's lists use, laid over the right edge: it
@@ -362,6 +385,20 @@ private fun TextLayoutResult.numberMarks(text: String): List<Pair<Float, String>
 
 /** Between a number and the text it numbers. */
 private val GUTTER_GAP = 12.dp
+
+/** Space around the text, inside the screen edges. */
+private val TEXT_PADDING_H = 16.dp
+
+/**
+ * Above the first line, and below the last.
+ *
+ * Asymmetric because the two edges are not alike: the top is the neck of the
+ * app bar, where a full line's worth of air reads as a gap between the rule and
+ * the text it belongs to; the bottom is the end of the screen, where the same
+ * air keeps the caret's row off the edge.
+ */
+private val TEXT_PADDING_TOP = 4.dp
+private val TEXT_PADDING_BOTTOM = 12.dp
 
 /**
  * How far the rule stands back from the text.
