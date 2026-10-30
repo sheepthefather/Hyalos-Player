@@ -63,6 +63,7 @@ import com.hyalos.player.files.SaveStage
 import com.hyalos.player.files.openWith
 import com.hyalos.player.ui.common.CenteredMessage
 import com.hyalos.player.ui.common.ErrorState
+import com.hyalos.player.ui.common.HorizontalScrollBar
 import com.hyalos.player.ui.common.ScrollBar
 import com.hyalos.player.ui.common.sizeText
 import com.hyalos.player.ui.editor.EditorViewModel.Notice
@@ -306,6 +307,11 @@ private fun Field(viewModel: EditorViewModel, wrap: Boolean) {
         // appears while the text moves and leaves a moment after it stops, so a
         // long file does not wear a permanent line over its last character.
         ScrollBar(scroll, Modifier.align(Alignment.CenterEnd))
+        // With wrapping off the text also runs sideways, and a sideways scroll
+        // with no bar is one the reader has to discover by trying.
+        if (!wrap) {
+            HorizontalScrollBar(across, Modifier.align(Alignment.BottomEnd))
+        }
     }
 }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -143,15 +144,40 @@ fun ScrollBar(state: LazyGridState, modifier: Modifier = Modifier) {
  */
 @Composable
 fun ScrollBar(state: ScrollState, modifier: Modifier = Modifier) {
+    PixelScrollBar(state, Axis.VERTICAL, modifier)
+}
+
+/**
+ * The same bar along the bottom, for content that scrolls sideways.
+ *
+ * The editor uses it when wrapping is off: with one paragraph per line, the
+ * long ones are reached by scrolling, and an invisible axis is one the reader
+ * has to guess at.
+ */
+@Composable
+fun HorizontalScrollBar(state: ScrollState, modifier: Modifier = Modifier) {
+    PixelScrollBar(state, Axis.HORIZONTAL, modifier)
+}
+
+/** One implementation for both pixel scrollbars; only the axis differs. */
+@Composable
+private fun PixelScrollBar(state: ScrollState, axis: Axis, modifier: Modifier) {
+    val vertical = axis == Axis.VERTICAL
     val scope = rememberCoroutineScope()
-    BoxWithConstraints(modifier.fillMaxHeight().width(SCROLLBAR_TOUCH_WIDTH)) {
+    val strip = if (vertical) {
+        Modifier.fillMaxHeight().width(SCROLLBAR_TOUCH_WIDTH)
+    } else {
+        Modifier.fillMaxWidth().height(SCROLLBAR_TOUCH_WIDTH)
+    }
+    BoxWithConstraints(modifier.then(strip)) {
         ScrollBar(
             thumb = scrollThumb(
                 value = state.value,
                 maxValue = state.maxValue,
-                viewportPx = constraints.maxHeight.toFloat(),
+                viewportPx = (if (vertical) constraints.maxHeight else constraints.maxWidth).toFloat(),
             ),
             scrolling = state.isScrollInProgress,
+            axis = axis,
             onScrollTo = { progress, _ ->
                 val target = (progress * state.maxValue).roundToInt()
                 scope.launch { state.scrollTo(target) }
@@ -159,6 +185,9 @@ fun ScrollBar(state: ScrollState, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/** Which way a bar runs. The two differ only in the axis they measure along. */
+private enum class Axis { VERTICAL, HORIZONTAL }
 
 /** How long the bar stays after the last movement, then how long it takes to go. */
 private const val SCROLLBAR_LINGER_MS = 900L
@@ -181,6 +210,7 @@ private val SCROLLBAR_MIN_THUMB = 32.dp
 private fun ScrollBar(
     thumb: ScrollThumb?,
     scrolling: Boolean,
+    axis: Axis = Axis.VERTICAL,
     /** Where to go for a drag ending [progress] of the way along the travel. */
     onScrollTo: (progress: Float, thumb: ScrollThumb) -> Unit,
     modifier: Modifier = Modifier,
@@ -206,14 +236,24 @@ private fun ScrollBar(
         label = "scrollbar",
     )
 
+    val vertical = axis == Axis.VERTICAL
+    // Two axes, one shape: the strip is a column at the right edge, or a row
+    // along the bottom, and everything below only differs in which of the two
+    // the track runs along.
+    val strip = if (vertical) {
+        Modifier.fillMaxHeight().width(SCROLLBAR_TOUCH_WIDTH)
+    } else {
+        Modifier.fillMaxWidth().height(SCROLLBAR_TOUCH_WIDTH)
+    }
+
     BoxWithConstraints(
-        modifier.fillMaxHeight().width(SCROLLBAR_TOUCH_WIDTH),
-        contentAlignment = Alignment.TopEnd,
+        modifier.then(strip),
+        contentAlignment = if (vertical) Alignment.TopEnd else Alignment.BottomStart,
     ) {
         if (thumb == null) return@BoxWithConstraints
 
         val density = LocalDensity.current
-        val trackPx = constraints.maxHeight.toFloat()
+        val trackPx = (if (vertical) constraints.maxHeight else constraints.maxWidth).toFloat()
         val thumbPx = (trackPx * thumb.sizeFraction)
             .coerceAtLeast(with(density) { SCROLLBAR_MIN_THUMB.toPx() })
         val travelPx = (trackPx - thumbPx).coerceAtLeast(0f)
@@ -226,16 +266,14 @@ private fun ScrollBar(
         val liveTravel = rememberUpdatedState(travelPx)
 
         Box(
-            Modifier
-                .fillMaxHeight()
-                .width(SCROLLBAR_TOUCH_WIDTH)
+            strip
                 // Only while it is on screen. A permanently live strip down the
                 // right edge would swallow taps meant for the last column of
                 // tiles — and a bar that is not visible is not something anyone
                 // is trying to grab.
                 .then(
                     if (shown) {
-                        Modifier.pointerInput(Unit) {
+                        Modifier.pointerInput(vertical) {
                             var fromPx = 0f
                             var startPx = 0f
                             var draggedPx = 0f
@@ -251,7 +289,7 @@ private fun ScrollBar(
                                 onDragCancel = { held = false },
                                 onDrag = { change, amount ->
                                     change.consume()
-                                    draggedPx += amount.y
+                                    draggedPx += if (vertical) amount.y else amount.x
                                     fromPx = (startPx + draggedPx).coerceIn(0f, travel)
                                     onScrollTo(
                                         if (travel > 0f) fromPx / travel else 0f,
@@ -268,11 +306,21 @@ private fun ScrollBar(
         ) {
             Box(
                 Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(end = SCROLLBAR_INSET)
-                    .width(SCROLLBAR_WIDTH)
-                    .height(with(density) { thumbPx.toDp() })
-                    .graphicsLayer { translationY = travelPx * thumb.progress }
+                    .align(if (vertical) Alignment.TopEnd else Alignment.BottomStart)
+                    .then(
+                        if (vertical) {
+                            Modifier.padding(end = SCROLLBAR_INSET)
+                                .width(SCROLLBAR_WIDTH)
+                                .height(with(density) { thumbPx.toDp() })
+                        } else {
+                            Modifier.padding(bottom = SCROLLBAR_INSET)
+                                .height(SCROLLBAR_WIDTH)
+                                .width(with(density) { thumbPx.toDp() })
+                        },
+                    )
+                    .graphicsLayer {
+                        if (vertical) translationY = travelPx * thumb.progress else translationX = travelPx * thumb.progress
+                    }
                     .clip(RoundedCornerShape(SCROLLBAR_WIDTH / 2))
                     .background(MaterialTheme.colorScheme.primary),
             )
