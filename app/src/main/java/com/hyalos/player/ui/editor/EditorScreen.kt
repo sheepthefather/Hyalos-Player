@@ -154,13 +154,22 @@ fun EditorScreen(viewModel: EditorViewModel, onBack: () -> Unit) {
                     if (viewModel.saving) {
                         CircularProgressIndicator(Modifier.size(20.dp))
                     } else {
-                        TextButton(
+                        // An icon like every other action bar in the app, rather
+                        // than a word: the save glyph is the same one the
+                        // platform draws, and a disabled icon says "not now"
+                        // without taking a button's worth of room.
+                        IconButton(
                             onClick = viewModel::save,
                             // Nothing to write, or nothing permitted: a button
                             // that would do nothing is worse than no button.
                             enabled = viewModel.dirty && !viewModel.readOnly &&
                                 state is State.Ready,
-                        ) { Text(stringResource(R.string.save)) }
+                        ) {
+                            Icon(
+                                painterResource(R.drawable.ic_save),
+                                stringResource(R.string.save),
+                            )
+                        }
                     }
                     OpenWithMenu(
                         viewModel = viewModel,
@@ -404,6 +413,9 @@ private fun OpenWithMenu(
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.editor_wrap)) },
+                leadingIcon = {
+                    Icon(painterResource(R.drawable.ic_wrap_text), contentDescription = null)
+                },
                 trailingIcon = {
                     if (wrap) Icon(painterResource(R.drawable.ic_check), null, Modifier.size(20.dp))
                 },
@@ -414,6 +426,9 @@ private fun OpenWithMenu(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.open_with)) },
+                leadingIcon = {
+                    Icon(painterResource(R.drawable.ic_open_in_new), contentDescription = null)
+                },
                 onClick = {
                     open = false
                     if (viewModel.largeDownload) onLarge() else viewModel.openExternally()
