@@ -68,6 +68,20 @@ sealed interface Route : NavKey {
     data class Playlist(val serverId: String) : Route
 
     /**
+     * A text file open in the built-in editor.
+     *
+     * [readOnly] comes from the listing, which is what the server said about the
+     * file rather than what this user may do — saving can still be refused, and
+     * the editor reports that when it happens.
+     */
+    @Serializable
+    data class EditText(
+        val serverId: String,
+        val path: String,
+        val readOnly: Boolean = false,
+    ) : Route
+
+    /**
      * The local-files tab's root: the device's own storage.
      *
      * A root of its own for the same reason [Playlists] is one — each tab keeps

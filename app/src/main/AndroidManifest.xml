@@ -59,6 +59,19 @@
     -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      Android 11 hides other apps from us unless we say what we are looking for.
+      Handing a file over needs to know *whether* anything can open it: the
+      chooser itself always resolves, so a startActivity that found nothing
+      would look exactly like one that worked. See `openWith`.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".HyalosApp"
         android:allowBackup="true"
@@ -107,6 +120,23 @@
             android:name=".files.CopyService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!--
+          Turns a file into a `content://` URI another app may read — a plain
+          `file://` URI is refused from API 24 onwards. See `OpenWith`.
+
+          `open/` is where a file downloaded from a share lands; `external-path`
+          serves the device's own storage without copying anything.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

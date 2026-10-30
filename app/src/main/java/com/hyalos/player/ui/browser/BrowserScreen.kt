@@ -66,6 +66,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.hyalos.player.R
 import com.hyalos.player.data.BrowserLayout
 import com.hyalos.player.data.SortKey
+import com.hyalos.player.files.openWith
 import com.hyalos.player.kernel.RemotePath
 import com.hyalos.player.ui.common.CenteredMessage
 import com.hyalos.player.ui.common.EntryGrid
@@ -73,7 +74,16 @@ import com.hyalos.player.ui.common.EntryList
 import com.hyalos.player.ui.common.EntryRow
 import com.hyalos.player.ui.common.ErrorState
 import com.hyalos.player.ui.common.InfoDialog
+import com.hyalos.player.ui.common.sizeText
 import kotlinx.coroutines.launch
+
+/**
+ * Above this, downloading a file just to open it is worth asking about first.
+ *
+ * A share's file has to come down before any viewer can read it; the local tab
+ * does not, and the screen only asks when [BrowserViewModel.downloadsToOpen].
+ */
+private const val LARGE_OPEN_BYTES = 1L shl 30
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +91,7 @@ fun BrowserScreen(
     viewModel: BrowserViewModel,
     onOpenDirectory: (path: String) -> Unit,
     onPlay: (path: String) -> Unit,
+    onEditText: (path: String, readOnly: Boolean) -> Unit,
     onJumpTo: (path: String) -> Unit,
     // Null where there is nothing to go back to and no server to edit: the
     // local tab's root, which is the browser itself and belongs to no server.
@@ -91,7 +102,11 @@ fun BrowserScreen(
 ) {
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val unplayable = stringResource(R.string.browser_unplayable)
+    val context = LocalContext.current
+    val noApp = stringResource(R.string.open_no_app)
+    // A file too large to download without asking. Null while nothing is
+    // waiting on the answer.
+    var askingLarge by remember { mutableStateOf<BrowserItem?>(null) }
     val title = RemotePath.name(viewModel.path).ifEmpty { viewModel.serverName }
     val layout by viewModel.layout.collectAsStateWithLifecycle()
     val sortKey by viewModel.sortKey.collectAsStateWithLifecycle()
@@ -114,9 +129,33 @@ fun BrowserScreen(
     DeleteDialog(viewModel)
     BrowserInfoDialog(viewModel)
     BusyDialog(viewModel.busy)
+    OpenProgressDialog(viewModel)
+    LargeFileDialog(
+        item = askingLarge,
+        size = askingLarge?.size?.let { sizeText(context, it) }.orEmpty(),
+        onDismiss = { askingLarge = null },
+        onOpen = {
+            askingLarge = null
+            viewModel.openExternally(it)
+        },
+    )
     ReportSnackbar(viewModel, snackbar)
     PlaylistSnackbar(viewModel, snackbar)
     NoticeSnackbar(viewModel, snackbar)
+
+    // A file the ViewModel prepared — downloaded from a share, or a local file
+    // that needed no copy — is handed to the chooser here, where a Context is.
+    // A chooser always resolves, so `openWith` checks for a handler itself and
+    // the refusal is shown as ordinary news.
+    LaunchedEffect(viewModel.readyToOpen) {
+        val file = viewModel.readyToOpen ?: return@LaunchedEffect
+        // Clearing the state changes this effect's key, which cancels it at the
+        // next suspension — so the message is shown on the screen's own scope.
+        // `openWith` itself is not suspending, which is why the chooser still
+        // appears; a snackbar shown here would be cancelled before it rendered.
+        viewModel.consumeReadyToOpen()
+        if (!openWith(context, file)) scope.launch { snackbar.showSnackbar(noApp) }
+    }
 
     Scaffold(
         topBar = {
@@ -225,7 +264,20 @@ fun BrowserScreen(
                             when {
                                 item.kind == BrowserItem.Kind.DIRECTORY -> onOpenDirectory(path)
                                 item.playable -> onPlay(path)
-                                else -> scope.launch { snackbar.showSnackbar(unplayable) }
+                                // A text file opens here rather than in another
+                                // app: the phone rarely has an editor worth
+                                // leaving for, and this one saves back to the
+                                // server. The check comes before the large-file
+                                // question because the editor never downloads —
+                                // it refuses anything over its own limit, and
+                                // the refusal screen offers the download.
+                                item.text -> onEditText(path, item.readOnly)
+                                // Everything else is somebody else's file. A
+                                // share's copy has to come down first, so a
+                                // large one is a decision rather than a wait.
+                                viewModel.downloadsToOpen &&
+                                    (item.size ?: 0L) >= LARGE_OPEN_BYTES -> askingLarge = item
+                                else -> viewModel.openExternally(item)
                             }
                         }
                     }
@@ -547,6 +599,70 @@ private fun BusyDialog(operation: BrowserViewModel.Operation?) {
                 CircularProgressIndicator(Modifier.size(24.dp))
                 Text(stringResource(label))
             }
+        },
+    )
+}
+
+/**
+ * How far a file has got on its way to another app.
+ *
+ * Not dismissible by tapping outside or by back: the download is running, and a
+ * dialog that can be waved away would leave it running invisibly. The way out is
+ * the cancel button, and it stops the work.
+ */
+@Composable
+private fun OpenProgressDialog(viewModel: BrowserViewModel) {
+    val preparing = viewModel.preparing ?: return
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(R.string.open_preparing, preparing.name)) },
+        text = {
+            Column {
+                if (preparing.total > 0) {
+                    val fraction = (preparing.done.toFloat() / preparing.total).coerceIn(0f, 1f)
+                    LinearProgressIndicator(
+                        progress = { fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.open_progress, (fraction * 100).toInt()))
+                } else {
+                    // The server did not say how large it is.
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::cancelOpen) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
+}
+
+/**
+ * The one question a share's file can raise before it is downloaded: is this
+ * worth the wait? A local file never asks — it is opened in place.
+ */
+@Composable
+private fun LargeFileDialog(
+    item: BrowserItem?,
+    size: String,
+    onDismiss: () -> Unit,
+    onOpen: (BrowserItem) -> Unit,
+) {
+    val pending = item ?: return
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.open_large_title)) },
+        text = { Text(stringResource(R.string.open_large_message, pending.name, size)) },
+        confirmButton = {
+            TextButton(onClick = { onOpen(pending) }) {
+                Text(stringResource(R.string.open_anyway))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
         },
     )
 }

@@ -135,6 +135,8 @@ class FileOperationsTest {
                 return data.size
             }
 
+            override suspend fun flush() = Unit
+
             override suspend fun release() = Unit
         }
     }

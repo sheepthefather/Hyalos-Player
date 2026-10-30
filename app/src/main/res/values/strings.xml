@@ -209,7 +209,36 @@
     <string name="info_language">语言</string>
 
     <string name="browser_root">根目录</string>
-    <string name="browser_unplayable">暂不支持播放这种文件</string>
+    <!-- 不是视频/音频的文件交给别的应用打开，像文件管理器那样。 -->
+    <string name="open_with">用其他应用打开</string>
+    <string name="open_no_app">没有可以打开这种文件的应用</string>
+    <string name="open_failed">无法读取这个文件</string>
+    <string name="open_preparing">正在准备「%1$s」…</string>
+    <string name="open_progress">%1$d%%</string>
+    <string name="open_large_title">文件较大</string>
+    <string name="open_large_message">「%1$s」（%2$s）需要先下载到缓存才能打开，继续吗？</string>
+    <string name="open_anyway">继续</string>
+
+    <!-- 内置文本编辑器 -->
+    <string name="editor_modified">已修改</string>
+    <string name="editor_saving">正在保存…</string>
+    <string name="editor_saved">已保存</string>
+    <!-- 顶栏副标题：编码，以及它是否与服务器上的一致。 -->
+    <string name="editor_status">%1$s · %2$s</string>
+    <string name="editor_refuse_binary">这不是文本文件，编辑器打不开。</string>
+    <string name="editor_refuse_large">文件超过 1 MiB，编辑器打不开。</string>
+    <string name="editor_refuse_unsupported">认不出这个文件的编码，编辑器只认得 UTF-8 和 GBK。</string>
+    <string name="editor_discard_title">放弃修改？</string>
+    <string name="editor_discard_body">「%1$s」有还没保存的修改，返回后就没有了。</string>
+    <string name="editor_discard">放弃</string>
+    <string name="editor_close_menu">更多</string>
+    <!-- 保存失败：原文件一动没动。 -->
+    <string name="editor_save_failed_title">保存失败</string>
+    <string name="editor_save_untouched">原文件没有被改动。</string>
+    <!-- 保存失败：两个版本都还在，只是名字不是原来那个。 -->
+    <string name="editor_save_swapped">新内容写进了「%1$s」，原文件在「%2$s」。改个名字就能把它们换回来。</string>
+    <string name="editor_save_unmappable">这个文件是 %1$s 编码，存不下其中的某些字符。删掉它们再保存，或者用其他应用打开。</string>
+    <string name="editor_nothing_to_open">文件还没打开，没有可以交出去的内容</string>
 
     <!-- 播放列表（每台服务器一个） -->
     <string name="playlist_title">播放列表</string>

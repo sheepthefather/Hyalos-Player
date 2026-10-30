@@ -60,11 +60,13 @@ interface FileSession {
 }
 
 /**
- * A file open across a copy.
+ * A file open across a copy, or being edited.
  *
- * Deliberately narrow: read, write, release. Everything else a file can do —
- * seeking, truncating, appending — is machinery a straight copy does not need,
- * and each addition is another thing a backend has to get right.
+ * Deliberately narrow: read, write, flush, release. Everything else a file can
+ * do — seeking, truncating, appending — is machinery a straight copy does not
+ * need, and each addition is another thing a backend has to get right. Flush is
+ * here because a save that reports success before the bytes are out is a save
+ * that lost them.
  */
 interface FileHandle {
     /** Up to [len] bytes at [offset]. An empty array means end of file. */
@@ -72,6 +74,15 @@ interface FileHandle {
 
     /** Bytes actually written, which may be fewer than were offered. */
     suspend fun write(offset: ULong, data: ByteArray): Int
+
+    /**
+     * Push buffered writes to the backend.
+     *
+     * Not a durability barrier on every backend, but it is the only chance to
+     * hear about a write that was accepted and then failed, and a save that
+     * skips it can claim success over a file that never arrived.
+     */
+    suspend fun flush()
 
     /** Close. Harmless to call twice. */
     suspend fun release()
@@ -110,6 +121,8 @@ class KernelFileHandle(private val file: RemoteFile) : FileHandle {
 
     override suspend fun write(offset: ULong, data: ByteArray): Int =
         file.writeAt(offset, data).toInt()
+
+    override suspend fun flush() = file.flush()
 
     override suspend fun release() {
         // A failed close is not worth propagating: the handle is going away

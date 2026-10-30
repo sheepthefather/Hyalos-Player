@@ -37,6 +37,8 @@ import com.hyalos.player.R
 import com.hyalos.player.ui.browser.BrowserScreen
 import com.hyalos.player.ui.browser.BrowserViewModel
 import com.hyalos.player.data.LocalSource
+import com.hyalos.player.ui.editor.EditorScreen
+import com.hyalos.player.ui.editor.EditorViewModel
 import com.hyalos.player.ui.local.LocalScreen
 import com.hyalos.player.ui.local.LocalViewModel
 import com.hyalos.player.ui.player.PlayerScreen
@@ -248,11 +250,22 @@ private fun RouteStack(
                     viewModel = viewModel { BrowserViewModel(container, key.serverId, key.path) },
                     onOpenDirectory = { backStack.add(Route.Browse(key.serverId, it)) },
                     onPlay = { backStack.add(Route.Play(key.serverId, it)) },
+                    onEditText = { path, readOnly ->
+                        backStack.add(Route.EditText(key.serverId, path, readOnly))
+                    },
                     onJumpTo = {
                         val target = Route.Browse(key.serverId, it)
                         backStack.replaceWith(jumpTo(backStack.filterIsInstance<Route>(), target))
                     },
                     onEditServer = { backStack.add(Route.EditServer(key.serverId)) },
+                    onBack = { backStack.removeLastOrNull() },
+                )
+            }
+            entry<Route.EditText> { key ->
+                EditorScreen(
+                    viewModel = viewModel {
+                        EditorViewModel(container, key.serverId, key.path, key.readOnly)
+                    },
                     onBack = { backStack.removeLastOrNull() },
                 )
             }

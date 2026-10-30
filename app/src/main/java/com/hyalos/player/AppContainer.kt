@@ -9,6 +9,8 @@ import com.hyalos.player.files.CopyCoordinator
 import com.hyalos.player.files.FileClipboard
 import com.hyalos.player.files.FileOperations
 import com.hyalos.player.files.KernelFileSession
+import com.hyalos.player.files.openCacheDir
+import com.hyalos.player.files.purgeOpenCache
 import com.hyalos.player.kernel.SessionManager
 import com.hyalos.player.kernel.shutdown
 import com.hyalos.player.thumbnails.ExtractLane
@@ -20,9 +22,19 @@ import com.hyalos.player.ui.player.ScreenLevels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import uniffi.krystallos_ffi.Kernel
 import java.io.File
+
+/**
+ * A file whose contents changed while another screen was on top.
+ *
+ * Published rather than pushed: the directory listing that has to notice is
+ * behind the screen that did the saving, and may or may not still be alive. The
+ * browser listens and re-reads only the directory that contains [path].
+ */
+data class ChangedPath(val serverId: String, val path: String)
 
 /**
  * Process-wide objects, created once in [HyalosApp].
@@ -68,6 +80,18 @@ class AppContainer(context: Context) {
     val clipboard = FileClipboard()
 
     /**
+     * Files that were edited under a browser's feet, by the text editor.
+     *
+     * A listing is read once and kept; an editor sitting on top of it can save
+     * the very file whose size and date are in that listing. There is no shared
+     * model between the two screens to update, so the news travels through here
+     * and the directory that contains the path re-reads itself. Nothing is
+     * replayed: an emission nobody is listening for belongs to a screen that has
+     * already gone, and re-reading on the next visit happens anyway.
+     */
+    val changes = MutableSharedFlow<ChangedPath>(extraBufferCapacity = 16)
+
+    /**
      * The brightness the player's gesture was last set to, or null for the
      * system's.
      *
@@ -103,6 +127,12 @@ class AppContainer(context: Context) {
     }
 
     init {
+        // A file handed to another app leaves a copy in the cache, and nothing
+        // owns it once that app is done with it. Old ones are dropped at every
+        // start, off the main thread and before anything can want the cache.
+        appScope.launch(Dispatchers.IO) {
+            purgeOpenCache(openCacheDir(appContext), System.currentTimeMillis())
+        }
         // The limit is a setting; the cache is what acts on it. Collected here
         // rather than read once, so changing it takes effect without a restart.
         appScope.launch {

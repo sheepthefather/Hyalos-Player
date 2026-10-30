@@ -6,6 +6,7 @@ import android.icu.util.ULocale
 import androidx.annotation.DrawableRes
 import com.hyalos.player.R
 import com.hyalos.player.data.SortKey
+import com.hyalos.player.files.isTextFile
 import uniffi.krystallos_ffi.DirEntry
 import uniffi.krystallos_ffi.Kind
 
@@ -26,6 +27,14 @@ data class BrowserItem(
     enum class Kind { DIRECTORY, VIDEO, AUDIO, OTHER }
 
     val playable: Boolean get() = kind == Kind.VIDEO || kind == Kind.AUDIO
+
+    /**
+     * A file the built-in text editor takes.
+     *
+     * The kind stays `OTHER`: a text file is not a new sort order, a new icon or
+     * a new thing to select, only a different door to open it through.
+     */
+    val text: Boolean get() = kind == Kind.OTHER && isTextFile(name)
 }
 
 /**

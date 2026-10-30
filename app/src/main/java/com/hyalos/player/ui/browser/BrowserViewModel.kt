@@ -17,6 +17,7 @@ import com.hyalos.player.files.ClipboardMode
 import com.hyalos.player.files.FileOperations
 import com.hyalos.player.files.OperationResult
 import com.hyalos.player.files.RemoteItem
+import com.hyalos.player.files.openCacheTarget
 import com.hyalos.player.info.InfoSection
 import com.hyalos.player.info.MediaProbe
 import com.hyalos.player.info.ProbedMedia
@@ -32,9 +33,11 @@ import com.hyalos.player.ui.common.dateText
 import com.hyalos.player.ui.common.sizeText
 import com.hyalos.player.ui.common.toUiError
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,8 +48,13 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 import uniffi.krystallos_ffi.KernelException
 import uniffi.krystallos_ffi.DirEntry
+import java.io.File
+
+/** How much is written per read when preparing a file for another app. */
+private const val OPEN_CHUNK_BYTES = 1 shl 20
 
 /**
  * One directory's listing.
@@ -219,6 +227,143 @@ class BrowserViewModel(
 
     fun dismissNotice() {
         notice = null
+    }
+
+    // ---------------------------------------------------------------------
+    // Opening a file in another app
+    // ---------------------------------------------------------------------
+
+    /** A file being downloaded so another app can open it, or `null`. */
+    data class Preparing(val name: String, val done: Long, val total: Long)
+
+    /**
+     * The download in progress, if any.
+     *
+     * Owned here rather than in the screen: it outlives a recomposition, and a
+     * copy that is half done must not be forgotten by a redraw.
+     */
+    var preparing by mutableStateOf<Preparing?>(null)
+        private set
+
+    /**
+     * A file ready for the chooser. The screen takes it — it is the one with a
+     * `Context` — opens the chooser, and calls [consumeReadyToOpen].
+     *
+     * A local file arrives here with nothing copied; a share's file has just
+     * been downloaded into the cache.
+     */
+    var readyToOpen by mutableStateOf<File?>(null)
+        private set
+
+    private var openJob: Job? = null
+
+    /** Whether opening a file here means downloading it first. */
+    val downloadsToOpen: Boolean get() = serverId != LocalSource.ID
+
+    /**
+     * Hand [item] to another app, downloading it first when it lives on a share.
+     *
+     * Not part of [busy]: that is the file-operation dialog, with its own cancel
+     * and report, and this makes a different promise — "something else will open
+     * this in a moment". Nor is it a file operation in [report]'s sense: nothing
+     * is being changed, only read.
+     *
+     * A file so large that downloading it is itself a decision is asked about by
+     * the screen before this is called.
+     */
+    fun openExternally(item: BrowserItem) {
+        if (openJob != null) return
+        // LAZY, so the job cannot run — and clear `openJob` in its `finally` —
+        // before the variable below has been assigned. A local file does no
+        // suspending work, so without this the first open would leave `openJob`
+        // pointing at a finished job and block every later one.
+        var job: Job? = null
+        job = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            val copied = downloadsToOpen
+            // Known **before** the download starts, so that a cancelled one can
+            // be cleaned up: assigning it after `download` returned left a
+            // partly written file behind whenever the user pressed cancel.
+            var target: File? = null
+            var completed = false
+            try {
+                val file = if (copied) {
+                    openCacheTarget(container.appContext, item.name)
+                } else {
+                    // Already readable by anyone: no copy is needed at all.
+                    File(LocalSource.root, RemotePath.join(path, item.name).removePrefix("/"))
+                }
+                target = file
+                if (copied) download(item, file)
+                if (!file.isFile) {
+                    notice = container.appContext.getString(R.string.open_failed)
+                    return@launch
+                }
+                completed = true
+                readyToOpen = file
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                notice = container.appContext.getString(R.string.open_failed)
+            } finally {
+                // A download that did not finish has no use for anyone; a
+                // finished one is the file the other app is about to open. Only
+                // our own copy is ever removed — a local file is the user's.
+                if (!completed && copied) {
+                    target?.delete()
+                    target?.parentFile?.delete() // the UUID directory, now empty
+                }
+                preparing = null
+                if (openJob === job) openJob = null
+            }
+        }
+        openJob = job
+        job.start()
+    }
+
+    /** Stops a download in progress; the partly written file goes with it. */
+    fun cancelOpen() {
+        val job = openJob
+        openJob = null
+        preparing = null
+        job?.cancel()
+    }
+
+    /** The screen has handed [readyToOpen] on; forget it. */
+    fun consumeReadyToOpen() {
+        readyToOpen = null
+    }
+
+    /**
+     * Copies one entry into [target], reporting progress as it goes.
+     *
+     * A connection of its own, like the info probe's: a kernel session runs one
+     * operation at a time, and a download that can take minutes must not be what
+     * a directory listing waits behind.
+     */
+    private suspend fun download(item: BrowserItem, target: File) {
+        val source = ServerReaderSource(
+            { container.sessions.connectDedicated(serverId) },
+            viewModelScope,
+        )
+        try {
+            val reader = source.reader(RemotePath.join(path, item.name))
+            val total = reader.length
+            preparing = Preparing(item.name, 0, total)
+            target.parentFile?.mkdirs()
+            target.outputStream().buffered().use { out ->
+                var offset = 0L
+                while (offset < total) {
+                    coroutineContext.ensureActive()
+                    val chunk = reader.readAt(offset, OPEN_CHUNK_BYTES)
+                    if (chunk.isEmpty()) break
+                    out.write(chunk)
+                    offset += chunk.size
+                    preparing = Preparing(item.name, offset, total)
+                }
+            }
+        } finally {
+            source.close()
+        }
     }
 
     /** The last add-to-playlist, for the confirmation at the bottom of the screen. */
@@ -641,6 +786,19 @@ class BrowserViewModel(
                         state = State.Loaded(visible, visible.map { it.toRow() })
                     }
                 }
+        }
+
+        // A file this directory contains was edited above it — the text editor
+        // saves through its own connection and this listing keeps its old size
+        // and date until somebody says otherwise. Only the parent of the changed
+        // path is re-read: every other browser on the stack is looking at a
+        // different directory.
+        viewModelScope.launch {
+            container.changes.collect { changed ->
+                if (changed.serverId == serverId && RemotePath.parent(changed.path) == path) {
+                    load(refresh = true)
+                }
+            }
         }
 
         load()

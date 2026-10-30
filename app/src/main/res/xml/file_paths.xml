@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Two roots, because the two sources need two different answers.
+
+    `open/` holds a share's file after it has been downloaded: nothing on the
+    device can read an SMB path, so the bytes have to arrive first.
+
+    `external-path` needs no copy at all — a file from the local tab is already
+    where the other app can reach it, and the provider is only what turns that
+    path into a URI the platform accepts.
+-->
+<paths>
+    <cache-path name="open" path="open/" />
+    <external-path name="external" path="." />
+</paths>
