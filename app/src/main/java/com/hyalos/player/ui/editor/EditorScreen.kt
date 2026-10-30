@@ -1,8 +1,10 @@
 package com.hyalos.player.ui.editor
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,7 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,17 +35,24 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hyalos.player.R
@@ -182,26 +194,105 @@ fun EditorScreen(viewModel: EditorViewModel, onBack: () -> Unit) {
 }
 
 /**
- * The editable text.
+ * The editable text, with a line-number gutter down the left.
  *
- * `BasicTextField` scrolls itself once its height is bounded, which is why it
- * has no `verticalScroll` around it: a scrollable child inside a scrollable
- * parent has no height to bound against and the cursor runs off the bottom.
+ * # Why the scrolling moved out of the field
+ *
+ * `BasicTextField` scrolls itself, and it does not say where to. A gutter that
+ * cannot see the scroll offset cannot follow the text, so the scrolling is done
+ * **once, outside both**: the gutter and the field sit side by side inside one
+ * `verticalScroll`, and scroll together because they are the same content.
+ *
+ * # Why the numbers come from the layout, not from counting newlines
+ *
+ * The field wraps. One logical line can occupy several rows, and the gutter has
+ * to put a number on the first row only — counting `\n` would put a number on
+ * every line and then drift one row further out of step with every wrap above
+ * it. `onTextLayout` hands back the rows the field actually produced, including
+ * where each one starts and how far down it sits, and those two facts are all
+ * the gutter needs.
+ *
+ * Only the numbers near the visible part of the text are drawn: a log of a
+ * megabyte is tens of thousands of lines, and a draw call each per frame is not
+ * something a text field can afford.
  */
 @Composable
 private fun Field(viewModel: EditorViewModel) {
-    BasicTextField(
-        value = viewModel.text,
-        onValueChange = viewModel::edit,
-        readOnly = viewModel.readOnly,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(
-            fontFamily = FontFamily.Monospace,
-            color = MaterialTheme.colorScheme.onSurface,
-        ),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+    val style = MaterialTheme.typography.bodyMedium.copy(
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurface,
     )
+    val density = LocalDensity.current
+    val scroll = rememberScrollState()
+    val measurer = rememberTextMeasurer()
+    val numberColor = MaterialTheme.colorScheme.onSurfaceVariant
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var viewport by remember { mutableFloatStateOf(0f) }
+
+    val marks = remember(layout) { layout?.numberMarks(viewModel.text).orEmpty() }
+    // Room for the widest number there is, measured in the same font as the text.
+    val digits = remember(marks) { marks.size.toString().length.coerceAtLeast(2) }
+    val numberWidth = remember(digits, style) { measurer.measure("0".repeat(digits), style).size.width }
+    val gap = with(density) { GUTTER_GAP.toPx() }
+    val gutter = numberWidth + gap
+    val textHeightPx = layout?.size?.height ?: 0
+
+    Box(Modifier.fillMaxSize().onSizeChanged { viewport = it.height.toFloat() }) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .verticalScroll(scroll),
+        ) {
+            Canvas(
+                Modifier
+                    .width(with(density) { gutter.toDp() })
+                    .height(with(density) { textHeightPx.toDp() }),
+            ) {
+                // One viewport either side of the visible band: generous enough
+                // that a fast fling never shows a gap, cheap enough that the
+                // cost stays proportional to what is on screen.
+                val from = scroll.value - viewport
+                val to = scroll.value + viewport * 2
+                val numberStyle = style.copy(color = numberColor)
+                for ((top, label) in marks) {
+                    if (top < from || top > to) continue
+                    val width = measurer.measure(label, numberStyle).size.width.toFloat()
+                    drawText(
+                        measurer,
+                        label,
+                        topLeft = Offset(gutter - gap - width, top),
+                        style = numberStyle,
+                    )
+                }
+            }
+            BasicTextField(
+                value = viewModel.text,
+                onValueChange = viewModel::edit,
+                readOnly = viewModel.readOnly,
+                textStyle = style,
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                onTextLayout = { layout = it },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
 }
+
+/** Where each numbered row starts, and what its number says. */
+private fun TextLayoutResult.numberMarks(text: String): List<Pair<Float, String>> {
+    val starts = IntArray(lineCount) { getLineStart(it) }
+    val numbers = lineNumbers(starts, text)
+    val marks = ArrayList<Pair<Float, String>>()
+    for (row in 0 until lineCount) {
+        val number = numbers[row]
+        if (number > 0) marks += getLineTop(row) to number.toString()
+    }
+    return marks
+}
+
+/** Between a number and the text it numbers. */
+private val GUTTER_GAP = 12.dp
 
 /** The encoding, and whether the file on screen still matches the file on the server. */
 @Composable
